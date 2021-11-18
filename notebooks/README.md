@@ -28,5 +28,5 @@ jupyter lab
 5. View and run your notebooks in the web browser
 
 #### Resources
-+ [Jupyter Lab Docs](https://jupyterlab.readthedocs.io/en/stable/index.html_)
++ [Jupyter Lab Docs](https://jupyterlab.readthedocs.io/en/stable/index.html)
 + [Conda Docs](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/index.html)
