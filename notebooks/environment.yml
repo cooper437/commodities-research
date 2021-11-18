@@ -1,0 +1,14 @@
+name: fund-research-analysis
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - jupyterlab=3
+  - xeus-python
+  - pandas
+  - plotly
+  - scikit-learn
+  - tqdm
+  - ipywidgets
+prefix: /usr/local/anaconda3/envs/fund-research-analysis
