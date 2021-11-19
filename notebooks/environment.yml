@@ -10,5 +10,6 @@ dependencies:
   - plotly
   - scikit-learn
   - tqdm
+  - matplotlib
   - ipywidgets
 prefix: /usr/local/anaconda3/envs/fund-research-analysis
