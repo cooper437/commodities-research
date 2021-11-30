@@ -1,0 +1,4 @@
+[core]
+    remote = trading-strategies-data-dvc
+['remote "trading-strategies-data-dvc"']
+    url = s3://trading-strategies-data-dvc
