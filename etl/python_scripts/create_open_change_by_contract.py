@@ -38,10 +38,10 @@ def contract_open_time(trading_bar_datetime: datetime):
     Given the date of a trading bar return the time of day of the open for that same date
     This helps account for the change in open time after the pit closed on 7/2/2015
     '''
-    if trading_bar_datetime >= DATE_OF_PIT_OPEN_CHANGE:
-        return trading_bar_datetime.replace(hour=8, minute=30, second=0, microsecond=0)
-    else:
-        return trading_bar_datetime.replace(hour=9, minute=5, second=0, microsecond=0)
+    if trading_bar_datetime >= DATE_OF_PIT_OPEN_CHANGE:  # Trading bar is after the change to pit open
+        return trading_bar_datetime.replace(hour=9, minute=30, second=0, microsecond=0)
+    else:  # Trading bar is before the change to pit open
+        return trading_bar_datetime.replace(hour=10, minute=5, second=0, microsecond=0)
 
 
 def calculate_minutes_after_open(trading_bar_datetime: datetime, contract_open_datetime: datetime):
@@ -57,11 +57,16 @@ def calculate_minutes_after_open(trading_bar_datetime: datetime, contract_open_d
     return delta_with_open_minutes
 
 
-def filter_rows_outside_open
+def filter_rows_outside_open(contract_df) -> pd.DataFrame:
+    '''Given a dataframe for a contract return a copy that has the rows that are outside the open window filtered out'''
+    is_inside_open_winow = (
+        (contract_df['Open Minutes Offset'] >= 0) & (contract_df['Open Minutes Offset'] <= 60))
+    filtered_rows = contract_df[is_inside_open_winow]
+    return filtered_rows
 
 
 initial_df = pd.DataFrame(
-    columns=['Symbol', 'DateTime', 'Minutes From Open' 'Open', 'High', 'Low', 'Close', 'Volume'])
+    columns=['Symbol', 'DateTime', 'Open Minutes Offset', 'Open', 'High', 'Low', 'Close', 'Volume'])
 csv_files = csv_files_to_analyze(
     data_dir=RAW_DATA_DIR, filename_prefix_matcher=CONTRACTS_PREFIX_MATCHER)
 print(f"Analyzing {len(csv_files)} the files")
@@ -74,12 +79,15 @@ for item in trange(len(csv_files)):
             trading_bar_datetime=row['DateTime'], contract_open_datetime=contract_open_time(row['DateTime'])),
         axis=1
     )
-    contract_df['Minutes From Open'] = minutes_after_open
+    contract_df['Open Minutes Offset'] = minutes_after_open
     contract_df['Symbol'] = contract_symbol
+    filtered_contract_df = filter_rows_outside_open(contract_df)
+    initial_df = pd.concat(
+        [initial_df, filtered_contract_df], ignore_index=True)
     # trading_bar_datetime = datetime(2009, 1, 14, 8, 58)
     # contract_open_datetime = datetime(2009, 1, 14, 9, 5)
     # calculate_minutes_after_open(trading_bar_datetime, contract_open_datetime)
     # trading_bar_datetime = contract_df['DateTime'][0]
     # contract_open_datetime = contract_open_time(trading_bar_datetime)
     # minutes_after_open(trading_bar_datetime, contract_open_datetime)
-    print('next')
+print(initial_df)
