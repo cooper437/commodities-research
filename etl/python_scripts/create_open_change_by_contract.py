@@ -1,3 +1,10 @@
+'''
+Transform our futures contracts dataset from First Rate Data into a csv table
+that contains just the opening window of trading activity for each contract and day.
+The raw data is also enriched to include the following fields:
+Symbol,DateTime,Open Minutes Offset,Open,High,Low,Close,Volume,Expiration Date,DTE
+Finally we save this file to disk as a csv
+'''
 import os
 import pandas as pd
 from tqdm import trange
