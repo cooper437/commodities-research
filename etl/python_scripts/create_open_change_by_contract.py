@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm import trange
 from datetime import datetime
 
-CONTRACTS_PREFIX_MATCHER = 'LEG2'  # Option limit if desired
+CONTRACTS_PREFIX_MATCHER = 'LE'  # Option limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
     CURRENT_DIR, '../../data/raw/firstratedata_futures')
@@ -15,6 +15,8 @@ EXPIRATION_DATE_BY_CONTRACT_CSV_FILEPATH = os.path.join(
 DATE_OF_PIT_OPEN_CHANGE = datetime(2015, 7, 2)
 # How many minutes from the contract open we consider to be the open window
 WIDTH_TRADING_WINDOW_OPEN_MINUTES = 60
+TARGET_FILENAME = 'contract_open_enriched.csv'
+TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
 
 
 def convert_expiration_date_by_contract_df(filename):
@@ -113,4 +115,4 @@ days_to_expiration_series = initial_df.apply(
     axis=1
 )
 initial_df['DTE'] = days_to_expiration_series
-print(initial_df)
+initial_df.to_csv(TARGET_FILE_DEST, index=False)
