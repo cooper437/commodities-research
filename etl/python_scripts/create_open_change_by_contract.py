@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import trange
 from datetime import datetime
 
-CONTRACTS_PREFIX_MATCHER = 'LE'  # Option limit if desired
+CONTRACTS_PREFIX_MATCHER = 'LE'  # Optional limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
     CURRENT_DIR, '../../data/raw/firstratedata_futures')
