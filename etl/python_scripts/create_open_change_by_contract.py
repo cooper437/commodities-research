@@ -3,19 +3,29 @@ import pandas as pd
 from tqdm import trange
 from datetime import datetime
 
-CONTRACTS_PREFIX_MATCHER = 'LEG'  # Option limit if desired
+CONTRACTS_PREFIX_MATCHER = 'LEG2'  # Option limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
     CURRENT_DIR, '../../data/raw/firstratedata_futures')
 PROCESSED_DATA_DIR = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts')
+EXPIRATION_DATE_BY_CONTRACT_CSV_FILEPATH = os.path.join(
+    PROCESSED_DATA_DIR, 'expiration_date_by_contract.csv')
 # The date that the pit open time changed
 DATE_OF_PIT_OPEN_CHANGE = datetime(2015, 7, 2)
 # How many minutes from the contract open we consider to be the open window
 WIDTH_TRADING_WINDOW_OPEN_MINUTES = 60
 
 
-def convert_csv_to_df(filename):
+def convert_expiration_date_by_contract_df(filename):
+    csv_as_df = pd.read_csv(
+        filename,
+        usecols=['Symbol', 'Expiration Date']
+    )
+    return csv_as_df
+
+
+def convert_contract_csv_to_df(filename):
     csv_as_df = pd.read_csv(
         f"{RAW_DATA_DIR}/{filename}",
         parse_dates=['DateTime'], usecols=['DateTime', 'Open', 'High', 'Low', 'Close', 'Volume']
@@ -65,15 +75,24 @@ def filter_rows_outside_open(contract_df) -> pd.DataFrame:
     return filtered_rows
 
 
+def calculate_dte(trading_bar_datetime: datetime, contract_expiration_datetime: datetime):
+    trading_bar_datetime_beginning = trading_bar_datetime.replace(
+        hour=0, minute=0)  # Zero out the seconds and minutes to avoid negative values
+    delta_to_expiration = contract_expiration_datetime - trading_bar_datetime_beginning
+    return delta_to_expiration.days
+
+
 initial_df = pd.DataFrame(
     columns=['Symbol', 'DateTime', 'Open Minutes Offset', 'Open', 'High', 'Low', 'Close', 'Volume'])
 csv_files = csv_files_to_analyze(
     data_dir=RAW_DATA_DIR, filename_prefix_matcher=CONTRACTS_PREFIX_MATCHER)
 print(f"Analyzing {len(csv_files)} the files")
+expiration_by_contract_df = convert_expiration_date_by_contract_df(
+    EXPIRATION_DATE_BY_CONTRACT_CSV_FILEPATH)
 for item in trange(len(csv_files)):
     file = csv_files[item]
     contract_symbol = file[0:-4]
-    contract_df = convert_csv_to_df(file)
+    contract_df = convert_contract_csv_to_df(file)
     minutes_after_open = contract_df.apply(
         lambda row: calculate_minutes_after_open(
             trading_bar_datetime=row['DateTime'], contract_open_datetime=contract_open_time(row['DateTime'])),
@@ -84,10 +103,14 @@ for item in trange(len(csv_files)):
     filtered_contract_df = filter_rows_outside_open(contract_df)
     initial_df = pd.concat(
         [initial_df, filtered_contract_df], ignore_index=True)
-    # trading_bar_datetime = datetime(2009, 1, 14, 8, 58)
-    # contract_open_datetime = datetime(2009, 1, 14, 9, 5)
-    # calculate_minutes_after_open(trading_bar_datetime, contract_open_datetime)
-    # trading_bar_datetime = contract_df['DateTime'][0]
-    # contract_open_datetime = contract_open_time(trading_bar_datetime)
-    # minutes_after_open(trading_bar_datetime, contract_open_datetime)
+initial_df = pd.merge(initial_df, expiration_by_contract_df, on=[
+                      'Symbol'], how='left')
+days_to_expiration_series = initial_df.apply(
+    lambda row: calculate_dte(
+        trading_bar_datetime=row['DateTime'], contract_expiration_datetime=datetime.strptime(
+            row['Expiration Date'], '%Y-%m-%d')
+    ),
+    axis=1
+)
+initial_df['DTE'] = days_to_expiration_series
 print(initial_df)
