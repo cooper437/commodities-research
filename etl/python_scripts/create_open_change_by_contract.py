@@ -91,11 +91,30 @@ def calculate_dte(trading_bar_datetime: datetime, contract_expiration_datetime: 
     return delta_to_expiration.days
 
 
-initial_df = pd.DataFrame(
+def get_open_bar_for_same_day(trading_minute_bar: pd.Series, a_contract_open_df: pd.DataFrame) -> pd.Series:
+    bar_datetime = trading_minute_bar['DateTime']
+    intraday_open_bar_datetime = contract_open_time(bar_datetime)
+    intraday_open_bar_df = a_contract_open_df[a_contract_open_df['DateTime']
+                                              == intraday_open_bar_datetime]
+    if len(intraday_open_bar_df) == 0:  # There is no bar available at the open time
+        return None
+    # There is a bar available at the open time
+    return intraday_open_bar_df.iloc[0]
+
+
+def calculate_intraday_open_price_change(trading_minute_bar: pd.Series, open_bar_for_same_day: pd.Series):
+    if open_bar_for_same_day is None:
+        return None
+    close_price_of_bar = trading_minute_bar['Close']
+    open_price_of_day = open_bar_for_same_day['Open']
+    return format(close_price_of_bar - open_price_of_day, '.3f')
+
+
+enriched_contract_open_df = pd.DataFrame(
     columns=['Symbol', 'DateTime', 'Open Minutes Offset', 'Open', 'High', 'Low', 'Close', 'Volume'])
 csv_files = csv_files_to_analyze(
     data_dir=RAW_DATA_DIR, filename_prefix_matcher=CONTRACTS_PREFIX_MATCHER)
-print(f"Analyzing {len(csv_files)} the files")
+print(f"Analyzing {len(csv_files)} files")
 expiration_by_contract_df = convert_expiration_date_by_contract_df(
     EXPIRATION_DATE_BY_CONTRACT_CSV_FILEPATH)
 for item in trange(len(csv_files)):
@@ -109,17 +128,23 @@ for item in trange(len(csv_files)):
     )
     contract_df['Open Minutes Offset'] = minutes_after_open
     contract_df['Symbol'] = contract_symbol
-    filtered_contract_df = filter_rows_outside_open(contract_df)
-    initial_df = pd.concat(
-        [initial_df, filtered_contract_df], ignore_index=True)
-initial_df = pd.merge(initial_df, expiration_by_contract_df, on=[
-                      'Symbol'], how='left')
-days_to_expiration_series = initial_df.apply(
+    filtered_contract_df = filter_rows_outside_open(contract_df).copy()
+    price_change_from_open_bar_series = filtered_contract_df.apply(
+        lambda row: calculate_intraday_open_price_change(trading_minute_bar=row, open_bar_for_same_day=get_open_bar_for_same_day(
+            trading_minute_bar=row, a_contract_open_df=filtered_contract_df)),
+        axis=1
+    )
+    filtered_contract_df['Intraday Open Bar Price Delta'] = price_change_from_open_bar_series
+    enriched_contract_open_df = pd.concat(
+        [enriched_contract_open_df, filtered_contract_df], ignore_index=True)
+enriched_contract_open_df = pd.merge(enriched_contract_open_df, expiration_by_contract_df, on=[
+    'Symbol'], how='left')
+days_to_expiration_series = enriched_contract_open_df.apply(
     lambda row: calculate_dte(
         trading_bar_datetime=row['DateTime'], contract_expiration_datetime=datetime.strptime(
             row['Expiration Date'], '%Y-%m-%d')
     ),
     axis=1
 )
-initial_df['DTE'] = days_to_expiration_series
-initial_df.to_csv(TARGET_FILE_DEST, index=False)
+enriched_contract_open_df['DTE'] = days_to_expiration_series
+enriched_contract_open_df.to_csv(TARGET_FILE_DEST, index=False)
