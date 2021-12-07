@@ -96,9 +96,18 @@ def get_open_bar_for_same_day(trading_minute_bar: pd.Series, a_contract_open_df:
     intraday_open_bar_datetime = contract_open_time(bar_datetime)
     intraday_open_bar_df = a_contract_open_df[a_contract_open_df['DateTime']
                                               == intraday_open_bar_datetime]
-    if len(intraday_open_bar_df) == 0:  # There is no bar available at the open time
-        return None
-    # There is a bar available at the open time
+    # When there is no bar available at the actual open time
+    # instead we use the first bar available for the same day
+    if len(intraday_open_bar_df) == 0:  # There is no bar available at the actual open time
+        bar_date_only = bar_datetime.date()
+        # All the bars from the same day
+        same_day_bars_only = a_contract_open_df[a_contract_open_df['DateTime'].dt.date == bar_date_only]
+        # Sorted ascending
+        same_day_bars_only_sorted = same_day_bars_only.sort_values(
+            by=['DateTime'], ascending=True)
+        # Return the 1st one we have as though its the open
+        return same_day_bars_only_sorted.iloc[0]
+    # There is a bar available at the actual open time so return it
     return intraday_open_bar_df.iloc[0]
 
 
