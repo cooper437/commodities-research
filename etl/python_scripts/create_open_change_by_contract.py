@@ -150,6 +150,7 @@ expiration_by_contract_df = convert_expiration_date_by_contract_df(
 for item in trange(len(csv_files)):
     file = csv_files[item]
     contract_symbol = file[0:-4]
+    print(f"Analyzing data for {contract_symbol}")
     contract_df = convert_contract_csv_to_df(file)
     minutes_after_open = contract_df.apply(
         lambda row: calculate_minutes_after_open(
