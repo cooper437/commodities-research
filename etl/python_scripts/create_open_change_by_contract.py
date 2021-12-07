@@ -134,7 +134,7 @@ for item in trange(len(csv_files)):
             trading_minute_bar=row, a_contract_open_df=filtered_contract_df)),
         axis=1
     )
-    filtered_contract_df['Intraday Open Bar Price Delta'] = price_change_from_open_bar_series
+    filtered_contract_df['Price Change From Intraday Open'] = price_change_from_open_bar_series
     enriched_contract_open_df = pd.concat(
         [enriched_contract_open_df, filtered_contract_df], ignore_index=True)
 enriched_contract_open_df = pd.merge(enriched_contract_open_df, expiration_by_contract_df, on=[
