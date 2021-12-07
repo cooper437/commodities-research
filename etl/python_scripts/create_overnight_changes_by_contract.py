@@ -16,6 +16,18 @@ UNIQUE_TRADING_DAYS_LE_CONTRACTS = os.path.join(
 )
 TARGET_FILENAME = 'overnight_changes_by_contract.csv'
 TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
+DATE_OF_PIT_OPEN_CHANGE = datetime(2015, 7, 2)
+
+
+def contract_open_time(trading_bar_datetime: datetime):
+    '''
+    Given the date of a trading bar return the time of day of the open for that same date
+    This helps account for the change in open time after the pit closed on 7/2/2015
+    '''
+    if trading_bar_datetime >= DATE_OF_PIT_OPEN_CHANGE:  # Trading bar is after the change to pit open
+        return trading_bar_datetime.replace(hour=9, minute=30, second=0, microsecond=0)
+    else:  # Trading bar is before the change to pit open
+        return trading_bar_datetime.replace(hour=10, minute=5, second=0, microsecond=0)
 
 
 def convert_contract_csv_to_df(filename):
@@ -46,8 +58,8 @@ def generate_empty_day_bar(contract_symbol, a_date) -> dict:
     empty_day_bar = {
         'Symbol': contract_symbol,
         'Date': a_date,
-        '11:59 Change': None,
-        '12:04 Change': None,
+        '12:59 Change': None,
+        '13:04 Change': None,
         'Last Bar Change': None
     }
     return empty_day_bar
@@ -60,12 +72,12 @@ def get_bar_at_time(a_days_bars_df: pd.DataFrame, time_to_get: datetime) -> pd.S
     return bars_at_time_df.iloc[0]
 
 
-def get_eleven_fifty_nine_datetime(year, month, day):
-    return datetime(year, month, day, 11, 59, 0)
+def get_twelve_fifty_nine_datetime(year, month, day):
+    return datetime(year, month, day, 12, 59, 0)
 
 
-def get_twelve_oh_four_datetime(year, month, day):
-    return datetime(year, month, day, 12, 4, 0)
+def get_thirteen_oh_four_datetime(year, month, day):
+    return datetime(year, month, day, 13, 4, 0)
 
 
 def calculate_change_from_prior_day_bar(todays_open_price, prior_day_bar):
@@ -76,7 +88,7 @@ def calculate_change_from_prior_day_bar(todays_open_price, prior_day_bar):
 
 
 overnight_changes_df = pd.DataFrame(
-    columns=['Symbol', 'Date', '11:59 Change', '12:04 Change', 'Last Bar Change'])
+    columns=['Symbol', 'Date', '12:59 Change', '13:04 Change', 'Last Bar Change'])
 csv_files = csv_files_to_analyze(
     data_dir=RAW_DATA_DIR, filename_prefix_matcher=CONTRACTS_PREFIX_MATCHER)
 unique_trading_days_all_le_contracts = convert_unique_trading_days_series(
@@ -90,7 +102,7 @@ for contract_to_process in trange(len(csv_files[0:1])):
     unique_dates_for_contract = sorted(
         list(contract_df['DateTime'].dt.date.unique()))
     for count, a_date in enumerate(unique_dates_for_contract):
-        if count is 0:  # We are at the first day of trading for this contract so there is no prior day to compare with
+        if count == 0:  # We are at the first day of trading for this contract so there is no prior day to compare with
             overnight_changes_df = overnight_changes_df.append(generate_empty_day_bar(
                 contract_symbol, a_date), ignore_index=True)
             continue
@@ -108,22 +120,22 @@ for contract_to_process in trange(len(csv_files[0:1])):
             overnight_changes_df = overnight_changes_df.append(generate_empty_day_bar(
                 contract_symbol, a_date), ignore_index=True)
             continue
-        prior_trading_day_eleven_fify_nine_datetime = get_eleven_fifty_nine_datetime(
+        prior_trading_day_twelve_fify_nine_datetime = get_twelve_fifty_nine_datetime(
             prior_trading_day_date.year, prior_trading_day_date.month, prior_trading_day_date.day)
-        prior_trading_day_twelve_oh_four_datetime = get_twelve_oh_four_datetime(
+        prior_trading_day_thirteen_oh_four_datetime = get_thirteen_oh_four_datetime(
             prior_trading_day_date.year, prior_trading_day_date.month, prior_trading_day_date.day)
-        prior_trading_day_eleven_fifty_nine_bar = get_bar_at_time(
-            a_days_bars_df=prior_trading_days_bars_df, time_to_get=prior_trading_day_eleven_fify_nine_datetime)
-        prior_trading_day_twelve_oh_four_bar = get_bar_at_time(
-            a_days_bars_df=prior_trading_days_bars_df, time_to_get=prior_trading_day_twelve_oh_four_datetime
+        prior_trading_day_twelve_fifty_nine_bar = get_bar_at_time(
+            a_days_bars_df=prior_trading_days_bars_df, time_to_get=prior_trading_day_twelve_fify_nine_datetime)
+        prior_trading_day_thirteen_oh_four_bar = get_bar_at_time(
+            a_days_bars_df=prior_trading_days_bars_df, time_to_get=prior_trading_day_thirteen_oh_four_datetime
         )
         prior_trading_day_last_bar = prior_trading_days_bars_df.iloc[-1]
-        first_bar_of_day = a_days_bars_df.iloc[0]
-        todays_open_price = first_bar_of_day['Open']
-        eleven_fifty_nine_price_change = calculate_change_from_prior_day_bar(
-            todays_open_price=todays_open_price, prior_day_bar=prior_trading_day_eleven_fifty_nine_bar)
-        twelve_oh_four_price_change = calculate_change_from_prior_day_bar(
-            todays_open_price=todays_open_price, prior_day_bar=prior_trading_day_twelve_oh_four_bar
+        this_days_open_bar = a_days_bars_df.iloc[0]
+        todays_open_price = this_days_open_bar['Open']
+        twelve_fifty_nine_price_change = calculate_change_from_prior_day_bar(
+            todays_open_price=todays_open_price, prior_day_bar=prior_trading_day_twelve_fifty_nine_bar)
+        thirteen_oh_four_price_change = calculate_change_from_prior_day_bar(
+            todays_open_price=todays_open_price, prior_day_bar=prior_trading_day_thirteen_oh_four_bar
         )
         last_bar_price_change = calculate_change_from_prior_day_bar(
             todays_open_price=todays_open_price, prior_day_bar=prior_trading_day_last_bar
@@ -131,8 +143,8 @@ for contract_to_process in trange(len(csv_files[0:1])):
         overnight_changes_df = overnight_changes_df.append({
             'Symbol': contract_symbol,
             'Date': a_date,
-            '11:59 Change': eleven_fifty_nine_price_change,
-            '12:04 Change': twelve_oh_four_price_change,
+            '12:59 Change': twelve_fifty_nine_price_change,
+            '13:04 Change': thirteen_oh_four_price_change,
             'Last Bar Change': last_bar_price_change
         }, ignore_index=True)
 overnight_changes_df.to_csv(TARGET_FILE_DEST, index=False)
