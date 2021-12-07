@@ -11,6 +11,8 @@ from pandas.core.frame import DataFrame
 from tqdm import trange
 from datetime import datetime
 
+# Flag that determines whether to remove all rows associated with days that are missing an open bar
+KEEP_DAYS_WITH_FLAT_OPEN = True
 CONTRACTS_PREFIX_MATCHER = 'LE'  # Optional limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
@@ -23,8 +25,8 @@ EXPIRATION_DATE_BY_CONTRACT_CSV_FILEPATH = os.path.join(
 DATE_OF_PIT_OPEN_CHANGE = datetime(2015, 7, 2)
 # How many minutes from the contract open we consider to be the open window
 WIDTH_TRADING_WINDOW_OPEN_MINUTES = 60
-TARGET_FILENAME = 'contract_open_enriched.csv'
-TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
+TARGET_FILENAME_BASE = 'contract_open_enriched'
+TARGET_FILENAME_EXTENSION = '.csv'
 
 
 def convert_expiration_date_by_contract_df(filename):
@@ -145,7 +147,6 @@ csv_files = csv_files_to_analyze(
 print(f"Analyzing {len(csv_files)} files")
 expiration_by_contract_df = convert_expiration_date_by_contract_df(
     EXPIRATION_DATE_BY_CONTRACT_CSV_FILEPATH)
-csv_files = csv_files[22:23]
 for item in trange(len(csv_files)):
     file = csv_files[item]
     contract_symbol = file[0:-4]
@@ -158,8 +159,9 @@ for item in trange(len(csv_files)):
     contract_df['Open Minutes Offset'] = minutes_after_open
     contract_df['Symbol'] = contract_symbol
     filtered_contract_df = filter_rows_outside_open(contract_df).copy()
-    filtered_contract_df = filter_rows_where_day_is_missing_open(
-        filtered_contract_df).copy()
+    if KEEP_DAYS_WITH_FLAT_OPEN is False:
+        filtered_contract_df = filter_rows_where_day_is_missing_open(
+            filtered_contract_df).copy()
     price_change_from_open_bar_series = filtered_contract_df.apply(
         lambda row: calculate_intraday_open_price_change(trading_minute_bar=row, open_bar_for_same_day=get_open_bar_for_same_day(
             trading_minute_bar=row, a_contract_open_df=filtered_contract_df)),
@@ -178,4 +180,10 @@ days_to_expiration_series = enriched_contract_open_df.apply(
     axis=1
 )
 enriched_contract_open_df['DTE'] = days_to_expiration_series
+if KEEP_DAYS_WITH_FLAT_OPEN is True:
+    TARGET_FILE_DEST = os.path.join(
+        PROCESSED_DATA_DIR, TARGET_FILENAME_BASE + '_with_flat_open' + TARGET_FILENAME_EXTENSION)
+else:
+    TARGET_FILE_DEST = os.path.join(
+        PROCESSED_DATA_DIR, TARGET_FILENAME_BASE + '_without_flat_open' + TARGET_FILENAME_EXTENSION)
 enriched_contract_open_df.to_csv(TARGET_FILE_DEST, index=False)
