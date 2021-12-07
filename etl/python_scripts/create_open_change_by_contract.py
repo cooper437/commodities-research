@@ -7,9 +7,12 @@ Finally we save this file to disk as a csv
 '''
 import os
 import pandas as pd
+from pandas.core.frame import DataFrame
 from tqdm import trange
 from datetime import datetime
 
+# Flag that determines whether to remove all rows associated with days that are missing an open bar
+KEEP_DAYS_WITH_FLAT_OPEN = True
 CONTRACTS_PREFIX_MATCHER = 'LE'  # Optional limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
@@ -22,8 +25,8 @@ EXPIRATION_DATE_BY_CONTRACT_CSV_FILEPATH = os.path.join(
 DATE_OF_PIT_OPEN_CHANGE = datetime(2015, 7, 2)
 # How many minutes from the contract open we consider to be the open window
 WIDTH_TRADING_WINDOW_OPEN_MINUTES = 60
-TARGET_FILENAME = 'contract_open_enriched.csv'
-TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
+TARGET_FILENAME_BASE = 'contract_open_enriched'
+TARGET_FILENAME_EXTENSION = '.csv'
 
 
 def convert_expiration_date_by_contract_df(filename):
@@ -96,9 +99,18 @@ def get_open_bar_for_same_day(trading_minute_bar: pd.Series, a_contract_open_df:
     intraday_open_bar_datetime = contract_open_time(bar_datetime)
     intraday_open_bar_df = a_contract_open_df[a_contract_open_df['DateTime']
                                               == intraday_open_bar_datetime]
-    if len(intraday_open_bar_df) == 0:  # There is no bar available at the open time
-        return None
-    # There is a bar available at the open time
+    # When there is no bar available at the actual open time
+    # instead we use the first bar available for the same day
+    if len(intraday_open_bar_df) == 0:  # There is no bar available at the actual open time
+        bar_date_only = bar_datetime.date()
+        # All the bars from the same day
+        same_day_bars_only = a_contract_open_df[a_contract_open_df['DateTime'].dt.date == bar_date_only]
+        # Sorted ascending
+        same_day_bars_only_sorted = same_day_bars_only.sort_values(
+            by=['DateTime'], ascending=True)
+        # Return the 1st one we have as though its the open
+        return same_day_bars_only_sorted.iloc[0]
+    # There is a bar available at the actual open time so return it
     return intraday_open_bar_df.iloc[0]
 
 
@@ -108,6 +120,24 @@ def calculate_intraday_open_price_change(trading_minute_bar: pd.Series, open_bar
     close_price_of_bar = trading_minute_bar['Close']
     open_price_of_day = open_bar_for_same_day['Open']
     return format(close_price_of_bar - open_price_of_day, '.3f')
+
+
+def filter_rows_where_day_is_missing_open(contract_df: pd.DataFrame) -> pd.DataFrame:
+    '''
+    Remove all rows where the day they are associated with is missing an actual open bar at
+    the actual market open time
+    '''
+    unique_dates = contract_df['DateTime'].dt.date.unique()
+    for a_date in unique_dates:
+        only_this_days_rows_df = contract_df[contract_df['DateTime'].dt.date == a_date]
+        has_actual_open_bar = 0 in set(
+            only_this_days_rows_df['Open Minutes Offset'])
+        if not has_actual_open_bar:  # This date is missing a real open bar
+            # Remove all bars for this date
+            contract_df = contract_df[contract_df['DateTime'].dt.date != a_date]
+        # print(
+        #     f"Date {a_date} is missing a real open so we are removing all its bars from the df")
+    return contract_df
 
 
 enriched_contract_open_df = pd.DataFrame(
@@ -120,6 +150,7 @@ expiration_by_contract_df = convert_expiration_date_by_contract_df(
 for item in trange(len(csv_files)):
     file = csv_files[item]
     contract_symbol = file[0:-4]
+    print(f"Analyzing data for {contract_symbol}")
     contract_df = convert_contract_csv_to_df(file)
     minutes_after_open = contract_df.apply(
         lambda row: calculate_minutes_after_open(
@@ -129,12 +160,15 @@ for item in trange(len(csv_files)):
     contract_df['Open Minutes Offset'] = minutes_after_open
     contract_df['Symbol'] = contract_symbol
     filtered_contract_df = filter_rows_outside_open(contract_df).copy()
+    if KEEP_DAYS_WITH_FLAT_OPEN is False:
+        filtered_contract_df = filter_rows_where_day_is_missing_open(
+            filtered_contract_df).copy()
     price_change_from_open_bar_series = filtered_contract_df.apply(
         lambda row: calculate_intraday_open_price_change(trading_minute_bar=row, open_bar_for_same_day=get_open_bar_for_same_day(
             trading_minute_bar=row, a_contract_open_df=filtered_contract_df)),
         axis=1
     )
-    filtered_contract_df['Intraday Open Bar Price Delta'] = price_change_from_open_bar_series
+    filtered_contract_df['Price Change From Intraday Open'] = price_change_from_open_bar_series
     enriched_contract_open_df = pd.concat(
         [enriched_contract_open_df, filtered_contract_df], ignore_index=True)
 enriched_contract_open_df = pd.merge(enriched_contract_open_df, expiration_by_contract_df, on=[
@@ -147,4 +181,10 @@ days_to_expiration_series = enriched_contract_open_df.apply(
     axis=1
 )
 enriched_contract_open_df['DTE'] = days_to_expiration_series
+if KEEP_DAYS_WITH_FLAT_OPEN is True:
+    TARGET_FILE_DEST = os.path.join(
+        PROCESSED_DATA_DIR, TARGET_FILENAME_BASE + '_with_flat_open' + TARGET_FILENAME_EXTENSION)
+else:
+    TARGET_FILE_DEST = os.path.join(
+        PROCESSED_DATA_DIR, TARGET_FILENAME_BASE + '_without_flat_open' + TARGET_FILENAME_EXTENSION)
 enriched_contract_open_df.to_csv(TARGET_FILE_DEST, index=False)
