@@ -7,6 +7,7 @@ Finally we save this file to disk as a csv
 '''
 import os
 import pandas as pd
+from pandas.core.frame import DataFrame
 from tqdm import trange
 from datetime import datetime
 
@@ -119,6 +120,24 @@ def calculate_intraday_open_price_change(trading_minute_bar: pd.Series, open_bar
     return format(close_price_of_bar - open_price_of_day, '.3f')
 
 
+def filter_rows_where_day_is_missing_open(contract_df: pd.DataFrame) -> pd.DataFrame:
+    '''
+    Remove all rows where the day they are associated with is missing an actual open bar at
+    the actual market open time
+    '''
+    unique_dates = contract_df['DateTime'].dt.date.unique()
+    for a_date in unique_dates:
+        only_this_days_rows_df = contract_df[contract_df['DateTime'].dt.date == a_date]
+        has_actual_open_bar = 0 in set(
+            only_this_days_rows_df['Open Minutes Offset'])
+        if not has_actual_open_bar:  # This date is missing a real open bar
+            # Remove all bars for this date
+            contract_df = contract_df[contract_df['DateTime'].dt.date != a_date]
+        # print(
+        #     f"Date {a_date} is missing a real open so we are removing all its bars from the df")
+    return contract_df
+
+
 enriched_contract_open_df = pd.DataFrame(
     columns=['Symbol', 'DateTime', 'Open Minutes Offset', 'Open', 'High', 'Low', 'Close', 'Volume'])
 csv_files = csv_files_to_analyze(
@@ -126,6 +145,7 @@ csv_files = csv_files_to_analyze(
 print(f"Analyzing {len(csv_files)} files")
 expiration_by_contract_df = convert_expiration_date_by_contract_df(
     EXPIRATION_DATE_BY_CONTRACT_CSV_FILEPATH)
+csv_files = csv_files[22:23]
 for item in trange(len(csv_files)):
     file = csv_files[item]
     contract_symbol = file[0:-4]
@@ -138,6 +158,8 @@ for item in trange(len(csv_files)):
     contract_df['Open Minutes Offset'] = minutes_after_open
     contract_df['Symbol'] = contract_symbol
     filtered_contract_df = filter_rows_outside_open(contract_df).copy()
+    filtered_contract_df = filter_rows_where_day_is_missing_open(
+        filtered_contract_df).copy()
     price_change_from_open_bar_series = filtered_contract_df.apply(
         lambda row: calculate_intraday_open_price_change(trading_minute_bar=row, open_bar_for_same_day=get_open_bar_for_same_day(
             trading_minute_bar=row, a_contract_open_df=filtered_contract_df)),
