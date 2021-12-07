@@ -14,6 +14,8 @@ PROCESSED_DATA_DIR = os.path.join(
 UNIQUE_TRADING_DAYS_LE_CONTRACTS = os.path.join(
     PROCESSED_DATA_DIR, 'unique_trading_days_le_contracts.csv'
 )
+TARGET_FILENAME = 'overnight_changes_by_contract.csv'
+TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
 
 
 def convert_contract_csv_to_df(filename):
@@ -133,4 +135,4 @@ for contract_to_process in trange(len(csv_files[0:1])):
             '12:04 Change': twelve_oh_four_price_change,
             'Last Bar Change': last_bar_price_change
         }, ignore_index=True)
-display(overnight_changes_df)
+overnight_changes_df.to_csv(TARGET_FILE_DEST, index=False)
