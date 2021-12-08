@@ -4,6 +4,9 @@ import pandas as pd
 from pandas.core.frame import DataFrame
 from tqdm import trange
 from datetime import datetime, timedelta
+import sys
+import getopt
+
 '''
 Analyze the raw contract data.
 Build out a new dataset that shows the overnight changes from one trading day to the next
@@ -14,6 +17,10 @@ OPEN_CLOSE_TRUE_OPEN:
 OPEN_CLOSE_SLIDING_OPEN:
     Open: use the first available bar during the open timeframe (first 60 min after 8:30 CT); if no bar during open timeframe, exclude the overnight change calc for ALL close types for that day
     Close: use the close bar IF that close bar exists; for 11:59 and 12:04 CT bars, if there is no bar available for those time, use the last bar of that day
+
+To change the strategy of the script you can pass in an argument as follows:
+create_overnight_changes_by_contract.py -s true_open
+create_overnight_changes_by_contract.py -s sliding_open
 '''
 
 
@@ -22,7 +29,6 @@ class Open_Close_Bar_Strategy_Enum(enum.Enum):
     sliding_open = '_sliding_open'
 
 
-OPEN_CLOSE_BAR_ANALYSIS_STRATEGY = Open_Close_Bar_Strategy_Enum.sliding_open
 CONTRACTS_PREFIX_MATCHER = 'LE'  # Optional limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
@@ -150,6 +156,20 @@ def calculate_change_from_prior_day_bar(todays_open_price, prior_day_bar):
     return format(price_change, '.3f')
 
 
+# Default to a sliding open strategy
+open_close_bar_analysis_strategy = Open_Close_Bar_Strategy_Enum.sliding_open
+
+# Parse our arguments from the command line to determine the strategy
+try:
+    opts, args = getopt.getopt(sys.argv[1:], ':s:')
+except getopt.GetoptError:
+    print('Run this script as follows: create_overnight_changes_by_contract.py -s <bar_analysis_strategy>')
+    sys.exit(2)
+for opt, arg in opts:
+    if opt in ('-s'):
+        open_close_bar_analysis_strategy = Open_Close_Bar_Strategy_Enum[arg]
+
+
 overnight_changes_df = pd.DataFrame(
     columns=['Symbol', 'Date', '12:59 Change', '13:04 Change', 'Last Bar Change'])
 csv_files = csv_files_to_analyze(
@@ -157,7 +177,7 @@ csv_files = csv_files_to_analyze(
 unique_trading_days_all_le_contracts = convert_unique_trading_days_series(
     UNIQUE_TRADING_DAYS_LE_CONTRACTS_FILE_PATH)
 print(
-    f"Analyzing {len(csv_files)} files using a {OPEN_CLOSE_BAR_ANALYSIS_STRATEGY.value} strategy")
+    f"Analyzing {len(csv_files)} files using a {open_close_bar_analysis_strategy.name} strategy")
 for contract_to_process in trange(len(csv_files)):
     file = csv_files[contract_to_process]
     contract_symbol = file[0:-4]
@@ -196,12 +216,12 @@ for contract_to_process in trange(len(csv_files)):
         prior_trading_day_last_bar = prior_trading_days_bars_df.iloc[-1]
         this_days_open_bar = get_true_open_bar_for_day(a_date=a_date)
         if this_days_open_bar is None:  # The true open bar is missing for this day
-            if OPEN_CLOSE_BAR_ANALYSIS_STRATEGY.name == Open_Close_Bar_Strategy_Enum.true_open.name:  # We are using a true open strategy
+            if open_close_bar_analysis_strategy.name == Open_Close_Bar_Strategy_Enum.true_open.name:  # We are using a true open strategy
                 overnight_changes_df = overnight_changes_df.append(generate_empty_day_bar(
                     contract_symbol, a_date), ignore_index=True)
                 continue
             # We are using a sliding open strategy
-            elif OPEN_CLOSE_BAR_ANALYSIS_STRATEGY.name == Open_Close_Bar_Strategy_Enum.sliding_open.name:
+            elif open_close_bar_analysis_strategy.name == Open_Close_Bar_Strategy_Enum.sliding_open.name:
                 this_days_open_bar = get_sliding_open_bar_for_day(
                     a_date=a_date, a_days_bars_df=a_days_bars_df)
                 if this_days_open_bar is None:  # There are no bars inside the open window for this day to use
@@ -225,5 +245,5 @@ for contract_to_process in trange(len(csv_files)):
             'Last Bar Change': last_bar_price_change
         }, ignore_index=True)
 target_file_dest = get_target_filepath(
-    open_close_bar_analysis_strategy=OPEN_CLOSE_BAR_ANALYSIS_STRATEGY)
+    open_close_bar_analysis_strategy=open_close_bar_analysis_strategy)
 overnight_changes_df.to_csv(target_file_dest, index=False)
