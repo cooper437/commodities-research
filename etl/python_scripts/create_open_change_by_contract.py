@@ -2,8 +2,12 @@
 Transform our futures contracts dataset from First Rate Data into a csv table
 that contains just the opening window of trading activity for each contract and day.
 The raw data is also enriched to include the following fields:
-Symbol,DateTime,Open Minutes Offset,Open,High,Low,Close,Volume,Expiration Date,DTE
+Symbol,DateTime,Open Minutes Offset,Open,High,Low,Close,Volume,Expiration Date,DTE, Price Change From Intraday Open
 Finally we save this file to disk as a csv
+
+There are two strategies that can be used when running this script:
+    True Open - We assume the open bar is the real open for that day. If the real open bar for a given day is missing we remove that entire day's worth of bars from the resulting data-set.
+    Sliding Open - If the true open bar is available for a day we assume that true open bar is the open bar. If the true open bar is not available for that day then we find the next bar within the open window and assume it is the open bar.
 '''
 import os
 import pandas as pd
@@ -11,8 +15,8 @@ from pandas.core.frame import DataFrame
 from tqdm import trange
 from datetime import datetime
 
-# Flag that determines whether to remove all rows associated with days that are missing an open bar
-KEEP_DAYS_WITH_FLAT_OPEN = True
+# Flag that determines whether to remove all rows associated with days that are missing a true open bar
+USE_SLIDING_OPEN_STRATEGY = True
 CONTRACTS_PREFIX_MATCHER = 'LE'  # Optional limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
@@ -160,7 +164,7 @@ for item in trange(len(csv_files)):
     contract_df['Open Minutes Offset'] = minutes_after_open
     contract_df['Symbol'] = contract_symbol
     filtered_contract_df = filter_rows_outside_open(contract_df).copy()
-    if KEEP_DAYS_WITH_FLAT_OPEN is False:
+    if USE_SLIDING_OPEN_STRATEGY is False:
         filtered_contract_df = filter_rows_where_day_is_missing_open(
             filtered_contract_df).copy()
     price_change_from_open_bar_series = filtered_contract_df.apply(
@@ -181,10 +185,10 @@ days_to_expiration_series = enriched_contract_open_df.apply(
     axis=1
 )
 enriched_contract_open_df['DTE'] = days_to_expiration_series
-if KEEP_DAYS_WITH_FLAT_OPEN is True:
+if USE_SLIDING_OPEN_STRATEGY is True:
     TARGET_FILE_DEST = os.path.join(
-        PROCESSED_DATA_DIR, TARGET_FILENAME_BASE + '_with_flat_open' + TARGET_FILENAME_EXTENSION)
+        PROCESSED_DATA_DIR, TARGET_FILENAME_BASE + '_sliding_open' + TARGET_FILENAME_EXTENSION)
 else:
     TARGET_FILE_DEST = os.path.join(
-        PROCESSED_DATA_DIR, TARGET_FILENAME_BASE + '_without_flat_open' + TARGET_FILENAME_EXTENSION)
+        PROCESSED_DATA_DIR, TARGET_FILENAME_BASE + '_true_open' + TARGET_FILENAME_EXTENSION)
 enriched_contract_open_df.to_csv(TARGET_FILE_DEST, index=False)
