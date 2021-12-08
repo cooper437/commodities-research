@@ -18,12 +18,10 @@ OPEN_CLOSE_SLIDING_OPEN:
 
 
 class Open_Close_Bar_Strategy_Enum(enum.Enum):
-    true_open = 'true open and close'
-    sliding_open = 'sliding open and close'
+    true_open = '_true_open'
+    sliding_open = '_sliding_open'
 
 
-# OPEN_CLOSE_TRUE_OPEN = 'open_close_true_open'
-# OPEN_CLOSE_SLIDING_OPEN = 'open_close_sliding_open'
 OPEN_CLOSE_BAR_ANALYSIS_STRATEGY = Open_Close_Bar_Strategy_Enum.sliding_open
 CONTRACTS_PREFIX_MATCHER = 'LE'  # Optional limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
@@ -34,10 +32,16 @@ PROCESSED_DATA_DIR = os.path.join(
 UNIQUE_TRADING_DAYS_LE_CONTRACTS_FILE_PATH = os.path.join(
     PROCESSED_DATA_DIR, 'unique_trading_days_le_contracts.csv'
 )
-TARGET_FILENAME = 'overnight_changes_by_contract.csv'
-TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
+TARGET_BASE_FILENAME = 'overnight_changes_by_contract'
+TARGET_FILE_EXTENSION = '.csv'
 DATE_OF_PIT_OPEN_CHANGE = datetime(2015, 7, 2)
 WIDTH_TRADING_WINDOW_OPEN_MINUTES = 60
+
+
+def get_target_filepath(open_close_bar_analysis_strategy: Open_Close_Bar_Strategy_Enum):
+    target_filepath = os.path.join(PROCESSED_DATA_DIR, TARGET_BASE_FILENAME +
+                                   open_close_bar_analysis_strategy.value + TARGET_FILE_EXTENSION)
+    return target_filepath
 
 
 def contract_open_time(trading_bar_datetime: datetime):
@@ -201,7 +205,7 @@ for contract_to_process in trange(len(csv_files)):
                 this_days_open_bar = get_sliding_open_bar_for_day(
                     a_date=a_date, a_days_bars_df=a_days_bars_df)
                 if this_days_open_bar is None:  # There are no bars inside the open window for this day to use
-                    overnight_changes_df.append(generate_empty_day_bar(
+                    overnight_changes_df = overnight_changes_df.append(generate_empty_day_bar(
                         contract_symbol, a_date), ignore_index=True)
                     continue
         todays_open_price = this_days_open_bar['Open']
@@ -220,4 +224,6 @@ for contract_to_process in trange(len(csv_files)):
             '13:04 Change': thirteen_oh_four_price_change,
             'Last Bar Change': last_bar_price_change
         }, ignore_index=True)
-overnight_changes_df.to_csv(TARGET_FILE_DEST, index=False)
+target_file_dest = get_target_filepath(
+    open_close_bar_analysis_strategy=OPEN_CLOSE_BAR_ANALYSIS_STRATEGY)
+overnight_changes_df.to_csv(target_file_dest, index=False)
