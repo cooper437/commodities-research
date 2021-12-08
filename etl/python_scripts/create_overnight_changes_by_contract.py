@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from pandas.core.frame import DataFrame
 from tqdm import trange
-from datetime import datetime
+from datetime import datetime, timedelta
 '''
 Analyze the raw contract data combined with our encriched contract open data.
 Build out a new dataset that shows the overnight changes from one trading day to the next
@@ -18,7 +18,7 @@ OPEN_CLOSE_SLIDING_OPEN:
 
 OPEN_CLOSE_TRUE_OPEN = 'open_close_true_open'
 OPEN_CLOSE_SLIDING_OPEN = 'open_close_sliding_open'
-OPEN_CLOSE_BAR_ANALYSIS_STRATEGY = OPEN_CLOSE_TRUE_OPEN
+OPEN_CLOSE_BAR_ANALYSIS_STRATEGY = OPEN_CLOSE_SLIDING_OPEN
 CONTRACTS_PREFIX_MATCHER = 'LE'  # Optional limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
@@ -34,6 +34,7 @@ ENRICHED_CONTRACT_OPEN_FILE_PATH = os.path.join(
 TARGET_FILENAME = 'overnight_changes_by_contract.csv'
 TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
 DATE_OF_PIT_OPEN_CHANGE = datetime(2015, 7, 2)
+WIDTH_TRADING_WINDOW_OPEN_MINUTES = 60
 
 
 def contract_open_time(trading_bar_datetime: datetime):
@@ -55,7 +56,31 @@ def get_true_open_bar_for_day(a_date: datetime.date):
                                              == this_days_true_open_time]
     if this_days_true_open_bar.empty:  # The true open bar is missing for this date
         return None
-    return this_days_true_open_bar
+    return this_days_true_open_bar.iloc[0]
+
+
+def get_df_rows_within_time_window(a_df: pd.DataFrame, window_start_time: datetime, window_end_time: datetime):
+    rows_inside_window = a_df.loc[(a_df['DateTime'] >=
+                                   window_start_time) & (a_df['DateTime'] <= window_end_time)]
+    return rows_inside_window.sort_values(
+        by=['DateTime'], ascending=True)
+
+
+def get_sliding_open_bar_for_day(a_date: datetime.date, a_days_bars_df: pd.DataFrame):
+    '''
+    Get the first bar of the day that is still within the open window as though its the open bar
+    If there are no bars inside the open window return None
+    '''
+    as_datetime = datetime.combine(a_date, datetime.min.time())
+    this_days_true_open_time = contract_open_time(as_datetime)
+    end_of_this_days_open_window = this_days_true_open_time + \
+        timedelta(minutes=WIDTH_TRADING_WINDOW_OPEN_MINUTES)
+    days_within_open_window_df = get_df_rows_within_time_window(
+        a_df=a_days_bars_df, window_start_time=this_days_true_open_time, window_end_time=end_of_this_days_open_window)
+    if days_within_open_window_df.empty:
+        return None
+    first_bar_of_day_within_open_window = days_within_open_window_df.iloc[0]
+    return first_bar_of_day_within_open_window
 
 
 def convert_enriched_contract_open_csv_to_df(filename):
@@ -177,11 +202,18 @@ for contract_to_process in trange(len(csv_files[0:1])):
         )
         prior_trading_day_last_bar = prior_trading_days_bars_df.iloc[-1]
         this_days_open_bar = get_true_open_bar_for_day(a_date=a_date)
-        if OPEN_CLOSE_BAR_ANALYSIS_STRATEGY == OPEN_CLOSE_TRUE_OPEN:  # We are using a true open strategy
-            if this_days_open_bar is None:  # The true open bar is missing for this day
+        if this_days_open_bar is None:  # The true open bar is missing for this day
+            if OPEN_CLOSE_BAR_ANALYSIS_STRATEGY == OPEN_CLOSE_TRUE_OPEN:  # We are using a true open strategy
                 overnight_changes_df = overnight_changes_df.append(generate_empty_day_bar(
                     contract_symbol, a_date), ignore_index=True)
                 continue
+            elif OPEN_CLOSE_BAR_ANALYSIS_STRATEGY == OPEN_CLOSE_SLIDING_OPEN:
+                this_days_open_bar = get_sliding_open_bar_for_day(
+                    a_date=a_date, a_days_bars_df=a_days_bars_df)
+                if this_days_open_bar is None:  # There are no bars inside the open window for this day to use
+                    overnight_changes_df.append(generate_empty_day_bar(
+                        contract_symbol, a_date), ignore_index=True)
+                    continue
         todays_open_price = this_days_open_bar['Open']
         twelve_fifty_nine_price_change = calculate_change_from_prior_day_bar(
             todays_open_price=todays_open_price, prior_day_bar=prior_trading_day_twelve_fifty_nine_bar)
