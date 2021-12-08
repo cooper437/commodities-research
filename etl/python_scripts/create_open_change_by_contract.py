@@ -16,6 +16,8 @@ from tqdm import trange
 from datetime import datetime
 
 # Flag that determines whether to remove all rows associated with days that are missing a true open bar
+# When USE_SLIDING_OPEN_STRATEGY is set to True we keep days that are missing a true open
+# Conversely when USE_SLIDING_OPEN_STRATEGY is set to False use a True open strategy and remove all the days that dont have a true open
 USE_SLIDING_OPEN_STRATEGY = True
 CONTRACTS_PREFIX_MATCHER = 'LE'  # Optional limit if desired
 CURRENT_DIR = os.path.dirname(__file__)
@@ -164,6 +166,7 @@ for item in trange(len(csv_files)):
     contract_df['Open Minutes Offset'] = minutes_after_open
     contract_df['Symbol'] = contract_symbol
     filtered_contract_df = filter_rows_outside_open(contract_df).copy()
+    # Using a true open strategy so we remove the days with a missing true open
     if USE_SLIDING_OPEN_STRATEGY is False:
         filtered_contract_df = filter_rows_where_day_is_missing_open(
             filtered_contract_df).copy()
