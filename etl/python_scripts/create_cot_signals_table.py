@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, NamedTuple
+from collections import namedtuple
 import os
 import operator
 import pandas as pd
@@ -27,18 +28,39 @@ def cot_csv_to_df(filename) -> pd.DataFrame:
     return csv_as_df
 
 
-def is_irrelevant_column(a_column):
-    irrelevant_columns = [
+def is_nonreportable_column(a_column):
+    non_reportable_columns = [
         'Date', '% OF Open Interest (OI) All NoCIT', 'Open Interest - % of OI']
-    is_irrelevant_col = operator.not_(any(
-        element == a_column for element in irrelevant_columns))
-    return is_irrelevant_col
+    is_non_reportable_col = operator.not_(any(
+        element == a_column for element in non_reportable_columns))
+    return is_non_reportable_col
 
 
-csv_files = list_reportable_files(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH)
-for a_file in csv_files:
+def filter_and_split_df_by_col_median_value(
+    cot_df: pd.DataFrame,
+    median_value: float,
+    column_name: str
+) -> NamedTuple:
+    above_median_df = cot_df[cot_df[column_name]
+                             >= median_value].copy().reset_index(drop=True)
+    below_median_df = cot_df[cot_df[column_name]
+                             < median_value].copy().reset_index(drop=True)
+    column_split_by_median = namedtuple(
+        'column_split_by_median', ['above_median_df', 'below_median_df'])
+    return column_split_by_median(above_median_df, below_median_df)
+
+
+def process_file(a_file: str):
     csv_as_df = cot_csv_to_df(
         os.path.join(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH, a_file))
     columns = csv_as_df.columns.values.tolist()
-    relevant_columns = list(filter(is_irrelevant_column, columns))
-    print(relevant_columns)
+    reportable_columns = list(filter(is_nonreportable_column, columns))
+    for a_column in reportable_columns:
+        median_value_for_column = csv_as_df[a_column].median()
+        filter_and_split_df_by_col_median_value(
+            cot_df=csv_as_df, median_value=median_value_for_column, column_name=a_column)
+        print(median_value_for_column)
+
+
+csv_files = list_reportable_files(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH)
+results = [process_file(a_file) for a_file in csv_files]
