@@ -107,6 +107,24 @@ def split_intraday_open_df_by_cot_median(
     return intraday_minute_bars_split(open_bars_where_cot_above_median_df, open_bars_where_cot_below_median_df)
 
 
+def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
+    intraday_minute_bars:  NamedTuple
+) -> pd.DataFrame:
+    '''
+    Group the intraday minute bars by their Open Minutes Offset and calculate the mean for each minute. Return all that as a single dataframe
+    '''
+    intraday_above_median_cot_field_df = intraday_minute_bars.above_median_df.groupby(
+        'Open Minutes Offset', as_index=False)['Price Change From Intraday Open'].mean()
+    intraday_below_median_cot_field_df = intraday_minute_bars.below_median_df.groupby(
+        'Open Minutes Offset', as_index=False)['Price Change From Intraday Open'].mean()
+    to_return_df = pd.DataFrame({
+        'Open Minutes Offset': intraday_above_median_cot_field_df['Open Minutes Offset'],
+        'Avg Intraday Price Change When COT Field Above Median': intraday_above_median_cot_field_df['Price Change From Intraday Open'],
+        'Avg Intraday Price Change When COT Field Below Median': intraday_below_median_cot_field_df['Price Change From Intraday Open']
+    })
+    return to_return_df
+
+
 def process_file(a_file: str, intraday_df: pd.DataFrame):
     csv_as_df = cot_csv_to_df(
         os.path.join(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH, a_file))
@@ -121,6 +139,8 @@ def process_file(a_file: str, intraday_df: pd.DataFrame):
             cot_below_median_df=cot_split_by_median.below_median_df,
             intraday_open_df=intraday_df
         )
+        open_intraday_average_changes = calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
+            intraday_split_by_cot_df_median)
         print(median_value_for_column)
 
 
