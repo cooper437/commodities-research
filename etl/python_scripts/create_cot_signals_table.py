@@ -5,14 +5,19 @@ import datetime
 import operator
 import pandas as pd
 from tqdm import trange
+import time
 
 CURRENT_DIR = os.path.dirname(__file__)
+PROCESSED_DATA_DIR = os.path.join(
+    CURRENT_DIR, '../../data/processed/futures_contracts/')
 COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH = os.path.join(
     CURRENT_DIR, '../../data/raw/nasdaq_data_link/commitment_of_trade/')
 CONTRACT_INTRADAY_SLIDING_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_sliding_open.csv')
 CONTRACT_INTRADAY_TRUE_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_true_open.csv')
+TARGET_FILENAME = 'nasdaq_cot_intraday_open_signals_correlation.csv'
+TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
 
 
 def list_reportable_files(base_path: str) -> List[str]:
@@ -192,44 +197,56 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
     return cot_analytics_table_df
 
 
-final_df = initialize_cot_analytics_table_df()
-csv_files = list_reportable_files(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH)
-intraday_sliding_open_df = intraday_open_csv_to_df(
-    CONTRACT_INTRADAY_SLIDING_OPEN_FILE_PATH)
-intraday_true_open_df = intraday_open_csv_to_df(
-    CONTRACT_INTRADAY_TRUE_OPEN_FILE_PATH)
-intraday_true_open_df['Date Of Preceding Tuesday'] = intraday_true_open_df['DateTime'].apply(
-    date_of_preceding_tuesday)
-intraday_sliding_open_df['Date Of Preceding Tuesday'] = intraday_sliding_open_df['DateTime'].apply(
-    date_of_preceding_tuesday)
+def build_target_df() -> pd.DataFrame:
+    final_df = initialize_cot_analytics_table_df()
+    csv_files = list_reportable_files(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH)
+    print("Loading the intraday sliding open dataframe into memory")
+    intraday_sliding_open_df = intraday_open_csv_to_df(
+        CONTRACT_INTRADAY_SLIDING_OPEN_FILE_PATH)
+    print("Loading the intraday true open dataframe into memory")
+    intraday_true_open_df = intraday_open_csv_to_df(
+        CONTRACT_INTRADAY_TRUE_OPEN_FILE_PATH)
+    print("Adding 'Date Of Preceding Tuesday' column to sliding open dataframe")
+    intraday_sliding_open_df['Date Of Preceding Tuesday'] = intraday_sliding_open_df['DateTime'].apply(
+        date_of_preceding_tuesday)
+    print("Adding 'Date Of Preceding Tuesday' column to true open dataframe")
+    intraday_true_open_df['Date Of Preceding Tuesday'] = intraday_true_open_df['DateTime'].apply(
+        date_of_preceding_tuesday)
 
-sliding_open_results_by_cot_reports = [
-    process_file(
-        a_file=a_file,
-        intraday_df=intraday_sliding_open_df,
-        open_type='sliding_open'
-    )
-    for a_file in csv_files
-]
-# Merge the list of sliding open dataframes together (one associated with each COT report)
-merged_sliding_open_results_by_cot_df = merge_dfs(
-    sliding_open_results_by_cot_reports)
-# Merge the merged datframe into the final one
-final_df = pd.concat(
-    [final_df, merged_sliding_open_results_by_cot_df], ignore_index=True)
+    sliding_open_results_by_cot_reports = [
+        process_file(
+            a_file=a_file,
+            intraday_df=intraday_sliding_open_df,
+            open_type='sliding_open'
+        )
+        for a_file in csv_files
+    ]
+    # Merge the list of sliding open dataframes together (one associated with each COT report)
+    merged_sliding_open_results_by_cot_df = merge_dfs(
+        sliding_open_results_by_cot_reports)
+    # Merge the merged datframe into the final one
+    final_df = pd.concat(
+        [final_df, merged_sliding_open_results_by_cot_df], ignore_index=True)
 
-true_open_results_by_cot_reports = [
-    process_file(
-        a_file=a_file,
-        intraday_df=intraday_true_open_df,
-        open_type='true_open'
-    )
-    for a_file in csv_files
-]
-# Merge the list of true open dataframes together (one associated with each COT report)
-merged_true_open_results_by_cot_df = merge_dfs(
-    true_open_results_by_cot_reports)
-# Merge the merged datframe into the final one
-final_df = pd.concat(
-    [final_df, merged_true_open_results_by_cot_df], ignore_index=True)
-print(final_df)
+    true_open_results_by_cot_reports = [
+        process_file(
+            a_file=a_file,
+            intraday_df=intraday_true_open_df,
+            open_type='true_open'
+        )
+        for a_file in csv_files
+    ]
+    # Merge the list of true open dataframes together (one associated with each COT report)
+    merged_true_open_results_by_cot_df = merge_dfs(
+        true_open_results_by_cot_reports)
+    # Merge the merged datframe into the final one
+    final_df = pd.concat(
+        [final_df, merged_true_open_results_by_cot_df], ignore_index=True)
+
+
+target_file_exists = os.path.exists(TARGET_FILE_DEST)
+if target_file_exists:
+    print('The target file already exists and will be overwritten. Abort now to cancel.')
+    time.sleep(5)
+target_df = build_target_df()
+target_df.to_csv(TARGET_FILE_DEST, index=False)
