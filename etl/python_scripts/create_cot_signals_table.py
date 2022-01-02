@@ -1,3 +1,12 @@
+'''
+Generate an analytics table of potential trading signals that correlates every field from the NASDAQ commitment of trade report with
+the intraday open datasets we've produced. We show the average change from open at a variety of times after the daily open for each
+field in the COT reports. Under the hood what we are doing is as follows for each COT field:
+1: Find the median value for the field
+2: Find all the dates above and below that median respectively
+3: Correlate those dates with actual trading activity at the open
+4: Average the price changes on those dates on the minute for every 60 minutes after the open
+'''
 from typing import List, NamedTuple
 from collections import namedtuple
 import os
@@ -251,7 +260,7 @@ def build_target_df() -> pd.DataFrame:
 # Script execution Starts Here
 target_file_exists = os.path.exists(TARGET_FILE_DEST)
 if target_file_exists:
-    print('The target file already exists and will be overwritten. Abort now to cancel.')
+    print('The target file already exists and will be overwritten. Abort with 5 seconds to cancel.')
     time.sleep(5)
 target_df = build_target_df()
 print(f"Saving target csv to {TARGET_FILE_DEST}")
