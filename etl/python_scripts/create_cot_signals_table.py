@@ -134,6 +134,13 @@ def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
     return to_return_df
 
 
+def merge_dfs(list_of_dfs) -> pd.DataFrame:
+    merged_df = initialize_cot_analytics_table_df()
+    for a_report in list_of_dfs:
+        merged_df = pd.concat([merged_df, a_report], ignore_index=True)
+    return merged_df
+
+
 def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
     cot_analytics_table_df = initialize_cot_analytics_table_df()
     csv_as_df = cot_csv_to_df(
@@ -204,8 +211,12 @@ sliding_open_results_by_cot_reports = [
     )
     for a_file in csv_files
 ]
-for a_report in sliding_open_results_by_cot_reports:
-    final_df = pd.concat([final_df, a_report], ignore_index=True)
+# Merge the list of sliding open dataframes together (one associated with each COT report)
+merged_sliding_open_results_by_cot_df = merge_dfs(
+    sliding_open_results_by_cot_reports)
+# Merge the merged datframe into the final one
+final_df = pd.concat(
+    [final_df, merged_sliding_open_results_by_cot_df], ignore_index=True)
 
 true_open_results_by_cot_reports = [
     process_file(
@@ -215,6 +226,10 @@ true_open_results_by_cot_reports = [
     )
     for a_file in csv_files
 ]
-for a_report in true_open_results_by_cot_reports:
-    final_df = pd.concat([final_df, a_report], ignore_index=True)
+# Merge the list of true open dataframes together (one associated with each COT report)
+merged_true_open_results_by_cot_df = merge_dfs(
+    true_open_results_by_cot_reports)
+# Merge the merged datframe into the final one
+final_df = pd.concat(
+    [final_df, merged_true_open_results_by_cot_df], ignore_index=True)
 print(final_df)
