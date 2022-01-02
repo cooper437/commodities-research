@@ -140,6 +140,7 @@ def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
 
 
 def merge_dfs(list_of_dfs) -> pd.DataFrame:
+    '''Combine a list of dataframes into one single one by concatting them together'''
     merged_df = initialize_cot_analytics_table_df()
     for a_report in list_of_dfs:
         merged_df = pd.concat([merged_df, a_report], ignore_index=True)
@@ -147,6 +148,7 @@ def merge_dfs(list_of_dfs) -> pd.DataFrame:
 
 
 def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
+    '''Process all the fields in one COT report file'''
     cot_analytics_table_df = initialize_cot_analytics_table_df()
     csv_as_df = cot_csv_to_df(
         os.path.join(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH, a_file))
@@ -198,6 +200,7 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
 
 
 def build_target_df() -> pd.DataFrame:
+    '''Build out the target dataframe containing all data'''
     final_df = initialize_cot_analytics_table_df()
     csv_files = list_reportable_files(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH)
     print("Loading the intraday sliding open dataframe into memory")
@@ -212,7 +215,7 @@ def build_target_df() -> pd.DataFrame:
     print("Adding 'Date Of Preceding Tuesday' column to true open dataframe")
     intraday_true_open_df['Date Of Preceding Tuesday'] = intraday_true_open_df['DateTime'].apply(
         date_of_preceding_tuesday)
-
+    print("Analyzing correlations between intraday open and cot reports for SLIDING OPEN")
     sliding_open_results_by_cot_reports = [
         process_file(
             a_file=a_file,
@@ -227,7 +230,7 @@ def build_target_df() -> pd.DataFrame:
     # Merge the merged datframe into the final one
     final_df = pd.concat(
         [final_df, merged_sliding_open_results_by_cot_df], ignore_index=True)
-
+    print("Analyzing correlations between intraday open and cot reports for TRUE OPEN")
     true_open_results_by_cot_reports = [
         process_file(
             a_file=a_file,
@@ -242,11 +245,14 @@ def build_target_df() -> pd.DataFrame:
     # Merge the merged datframe into the final one
     final_df = pd.concat(
         [final_df, merged_true_open_results_by_cot_df], ignore_index=True)
+    return final_df
 
 
+# Script execution Starts Here
 target_file_exists = os.path.exists(TARGET_FILE_DEST)
 if target_file_exists:
     print('The target file already exists and will be overwritten. Abort now to cancel.')
     time.sleep(5)
 target_df = build_target_df()
+print(f"Saving target csv to {TARGET_FILE_DEST}")
 target_df.to_csv(TARGET_FILE_DEST, index=False)
