@@ -53,8 +53,8 @@ def intraday_open_csv_to_df(filename) -> pd.DataFrame:
 
 def initialize_cot_analytics_table_df() -> pd.DataFrame:
     '''A dataframe that contains the structure needed for the analytics table that is output by the script'''
-    columns = ['Report Name', 'Field Name', 'Open Type', 'Above/Below Median', 'Median Value', 'AFCO t=0',
-               'AFCO t+5', 'AFCO t+15', 'AFCO t+30', 'AFCO t+40', 'AFCO t+50', 'AFCO t+60']
+    columns = ['Report Name', 'Field Name', 'Open Type', 'Above/Below Median', 'Median Value', 'ACFO t=0',
+               'ACFO t+5', 'ACFO t+15', 'ACFO t+30', 'ACFO t+40', 'ACFO t+50', 'ACFO t+60']
     initialized_df = pd.DataFrame(columns=columns)
     return initialized_df
 
@@ -182,13 +182,13 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Above/Below Median': 'above',
             'Open Type': open_type,
             'Median Value': median_value_for_column,
-            'AFCO t=0': open_intraday_average_changes.iloc[0]['Avg Intraday Price Change When COT Field Above Median'],
-            'AFCO t+5': open_intraday_average_changes.iloc[4]['Avg Intraday Price Change When COT Field Above Median'],
-            'AFCO t+15': open_intraday_average_changes.iloc[14]['Avg Intraday Price Change When COT Field Above Median'],
-            'AFCO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Above Median'],
-            'AFCO t+40': open_intraday_average_changes.iloc[39]['Avg Intraday Price Change When COT Field Above Median'],
-            'AFCO t+50': open_intraday_average_changes.iloc[49]['Avg Intraday Price Change When COT Field Above Median'],
-            'AFCO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median']
+            'ACFO t=0': open_intraday_average_changes.iloc[0]['Avg Intraday Price Change When COT Field Above Median'],
+            'ACFO t+5': open_intraday_average_changes.iloc[4]['Avg Intraday Price Change When COT Field Above Median'],
+            'ACFO t+15': open_intraday_average_changes.iloc[14]['Avg Intraday Price Change When COT Field Above Median'],
+            'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Above Median'],
+            'ACFO t+40': open_intraday_average_changes.iloc[39]['Avg Intraday Price Change When COT Field Above Median'],
+            'ACFO t+50': open_intraday_average_changes.iloc[49]['Avg Intraday Price Change When COT Field Above Median'],
+            'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median']
         }, ignore_index=True)
         # Now capture below median stats
         cot_analytics_table_df = cot_analytics_table_df.append({
@@ -197,13 +197,13 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Above/Below Median': 'below',
             'Open Type': open_type,
             'Median Value': median_value_for_column,
-            'AFCO t=0': open_intraday_average_changes.iloc[0]['Avg Intraday Price Change When COT Field Below Median'],
-            'AFCO t+5': open_intraday_average_changes.iloc[4]['Avg Intraday Price Change When COT Field Below Median'],
-            'AFCO t+15': open_intraday_average_changes.iloc[14]['Avg Intraday Price Change When COT Field Below Median'],
-            'AFCO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Below Median'],
-            'AFCO t+40': open_intraday_average_changes.iloc[39]['Avg Intraday Price Change When COT Field Below Median'],
-            'AFCO t+50': open_intraday_average_changes.iloc[49]['Avg Intraday Price Change When COT Field Below Median'],
-            'AFCO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median']
+            'ACFO t=0': open_intraday_average_changes.iloc[0]['Avg Intraday Price Change When COT Field Below Median'],
+            'ACFO t+5': open_intraday_average_changes.iloc[4]['Avg Intraday Price Change When COT Field Below Median'],
+            'ACFO t+15': open_intraday_average_changes.iloc[14]['Avg Intraday Price Change When COT Field Below Median'],
+            'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Below Median'],
+            'ACFO t+40': open_intraday_average_changes.iloc[39]['Avg Intraday Price Change When COT Field Below Median'],
+            'ACFO t+50': open_intraday_average_changes.iloc[49]['Avg Intraday Price Change When COT Field Below Median'],
+            'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median']
         }, ignore_index=True)
     return cot_analytics_table_df
 
@@ -260,7 +260,7 @@ def build_target_df() -> pd.DataFrame:
 # Script execution Starts Here
 target_file_exists = os.path.exists(TARGET_FILE_DEST)
 if target_file_exists:
-    print('The target file already exists and will be overwritten. Abort with 5 seconds to cancel.')
+    print('The target file already exists and will be overwritten. Abort in the next 5 seconds to cancel.')
     time.sleep(5)
 target_df = build_target_df()
 print(f"Saving target csv to {TARGET_FILE_DEST}")
