@@ -15,6 +15,7 @@ import operator
 import pandas as pd
 from tqdm import trange
 import time
+import cytoolz
 
 CURRENT_DIR = os.path.dirname(__file__)
 PROCESSED_DATA_DIR = os.path.join(
@@ -152,6 +153,48 @@ def calculate_std_deviation_at_open_minute_offset(intraday_minute_bars:  NamedTu
     return intraday_price_change_standard_deviation(above_median_standard_deviation, below_median_standard_deviation)
 
 
+def calculate_minmax_acfo(intraday_minute_bars:  NamedTuple) -> dict:
+    above_median_df = intraday_minute_bars.above_median_df
+    below_median_df = intraday_minute_bars.below_median_df
+    open_minutes = [*range(0, 60, 1)]
+    minute_of_max_above_median_mean_acfo = None
+    minute_of_min_above_median_mean_acfo = None
+    minute_of_max_below_median_mean_acfo = None
+    minute_of_min_below_median_mean_acfo = None
+    max_above_median_mean_acfo = None
+    min_above_median_mean_acfo = None
+    max_below_median_mean_acfo = None
+    min_below_median_mean_acfo = None
+    for minute in open_minutes:
+        mean_acfo_above_median_at_minute = above_median_df[above_median_df['Open Minutes Offset']
+                                                           == minute]['Price Change From Intraday Open'].mean()
+        mean_acfo_below_median_at_minute = below_median_df[below_median_df['Open Minutes Offset']
+                                                           == minute]['Price Change From Intraday Open'].mean()
+        if (max_above_median_mean_acfo is None) or (mean_acfo_above_median_at_minute >= max_above_median_mean_acfo):
+            max_above_median_mean_acfo = mean_acfo_above_median_at_minute
+            minute_of_max_above_median_mean_acfo = minute
+        if (min_above_median_mean_acfo is None) or (mean_acfo_above_median_at_minute <= min_above_median_mean_acfo):
+            min_above_median_mean_acfo = mean_acfo_above_median_at_minute
+            minute_of_min_above_median_mean_acfo = minute
+        if (max_below_median_mean_acfo is None) or (mean_acfo_below_median_at_minute >= max_below_median_mean_acfo):
+            max_below_median_mean_acfo = mean_acfo_below_median_at_minute
+            minute_of_max_below_median_mean_acfo = minute
+        if (min_below_median_mean_acfo is None) or (mean_acfo_below_median_at_minute <= min_below_median_mean_acfo):
+            min_below_median_mean_acfo = mean_acfo_below_median_at_minute
+            minute_of_min_below_median_mean_acfo = minute
+    minmax_acfo_stats = {
+        'minute_of_max_above_median_mean_acfo': minute_of_max_above_median_mean_acfo,
+        'minute_of_min_above_median_mean_acfo': minute_of_min_above_median_mean_acfo,
+        'minute_of_max_below_median_mean_acfo': minute_of_max_below_median_mean_acfo,
+        'minute_of_min_below_median_mean_acfo': minute_of_min_below_median_mean_acfo,
+        'max_above_median_mean_acfo': max_above_median_mean_acfo,
+        'min_above_median_mean_acfo': min_above_median_mean_acfo,
+        'max_below_median_mean_acfo': max_below_median_mean_acfo,
+        'min_below_median_mean_acfo': min_below_median_mean_acfo
+    }
+    return minmax_acfo_stats
+
+
 def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
     intraday_minute_bars:  NamedTuple
 ) -> pd.DataFrame:
@@ -201,6 +244,8 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             intraday_minute_bars=intraday_split_by_cot_df_median,
             open_minute_offset=STANDARD_DEVIATION_MINUTE_OF_INTEREST - 1
         )
+        minmax_acfo_stats = calculate_minmax_acfo(
+            intraday_minute_bars=intraday_split_by_cot_df_median)
         # Capture above median stats
         cot_analytics_table_df = cot_analytics_table_df.append({
             'Report Name': a_file[:-4],
@@ -211,7 +256,11 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Above Median'],
             'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median'],
             f"Std Deviation of Intraday Price Change at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
-                intraday_price_change_standard_deviations.above_median
+                intraday_price_change_standard_deviations.above_median,
+            'Max ACFO': minmax_acfo_stats['max_above_median_mean_acfo'],
+            'Min ACFO': minmax_acfo_stats['min_above_median_mean_acfo'],
+            'Minute of Max ACFO': minmax_acfo_stats['minute_of_max_above_median_mean_acfo'],
+            'Minute of Min ACFO': minmax_acfo_stats['minute_of_min_above_median_mean_acfo']
         }, ignore_index=True)
         # Now capture below median stats
         cot_analytics_table_df = cot_analytics_table_df.append({
@@ -223,7 +272,11 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Below Median'],
             'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median'],
             f"Std Deviation of Intraday Price Change at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
-                intraday_price_change_standard_deviations.below_median
+                intraday_price_change_standard_deviations.below_median,
+            'Max ACFO': minmax_acfo_stats['max_below_median_mean_acfo'],
+            'Min ACFO': minmax_acfo_stats['min_below_median_mean_acfo'],
+            'Minute of Max ACFO': minmax_acfo_stats['minute_of_max_below_median_mean_acfo'],
+            'Minute of Min ACFO': minmax_acfo_stats['minute_of_min_below_median_mean_acfo']
         }, ignore_index=True)
     return cot_analytics_table_df
 
