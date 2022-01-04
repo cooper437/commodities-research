@@ -28,6 +28,8 @@ CONTRACT_INTRADAY_TRUE_OPEN_FILE_PATH = os.path.join(
 TARGET_FILENAME = 'nasdaq_cot_intraday_open_signals_correlation.csv'
 TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
 
+STANDARD_DEVIATION_MINUTE_OF_INTEREST = 60
+
 
 def list_reportable_files(base_path: str) -> List[str]:
     # Get a list of all the csv files to process in this script
@@ -53,8 +55,8 @@ def intraday_open_csv_to_df(filename) -> pd.DataFrame:
 
 def initialize_cot_analytics_table_df() -> pd.DataFrame:
     '''A dataframe that contains the structure needed for the analytics table that is output by the script'''
-    columns = ['Report Name', 'Field Name', 'Open Type', 'Above/Below Median', 'Median Value', 'ACFO t=0',
-               'ACFO t+5', 'ACFO t+15', 'ACFO t+30', 'ACFO t+40', 'ACFO t+50', 'ACFO t+60']
+    columns = ['Report Name', 'Field Name', 'Open Type', 'Above/Below Median', 'Median Value',
+               'ACFO t+30', 'ACFO t+60']
     initialized_df = pd.DataFrame(columns=columns)
     return initialized_df
 
@@ -130,6 +132,26 @@ def split_intraday_open_df_by_cot_median(
     return intraday_minute_bars_split(open_bars_where_cot_above_median_df, open_bars_where_cot_below_median_df)
 
 
+def calculate_std_deviation_at_open_minute_offset(intraday_minute_bars:  NamedTuple, open_minute_offset: int) -> NamedTuple:
+    '''
+    Calculate the standard deviation of the "Price Change From Intraday Open" at n minutes after the open,
+    for a given field split by above and below median
+    '''
+    above_median_df = intraday_minute_bars.above_median_df
+    below_median_df = intraday_minute_bars.below_median_df
+    above_median_at_open_minute_offset = above_median_df[
+        above_median_df['Open Minutes Offset'] == open_minute_offset]
+    below_median_at_open_minute_offset = below_median_df[
+        below_median_df['Open Minutes Offset'] == open_minute_offset]
+    above_median_standard_deviation = above_median_at_open_minute_offset['Price Change From Intraday Open'].std(
+    )
+    below_median_standard_deviation = below_median_at_open_minute_offset['Price Change From Intraday Open'].std(
+    )
+    intraday_price_change_standard_deviation = namedtuple('intraday_price_change_standard_deviation', [
+        'above_median', 'below_median'])
+    return intraday_price_change_standard_deviation(above_median_standard_deviation, below_median_standard_deviation)
+
+
 def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
     intraday_minute_bars:  NamedTuple
 ) -> pd.DataFrame:
@@ -175,6 +197,10 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
         )
         open_intraday_average_changes = calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
             intraday_split_by_cot_df_median)
+        intraday_price_change_standard_deviations = calculate_std_deviation_at_open_minute_offset(
+            intraday_minute_bars=intraday_split_by_cot_df_median,
+            open_minute_offset=STANDARD_DEVIATION_MINUTE_OF_INTEREST - 1
+        )
         # Capture above median stats
         cot_analytics_table_df = cot_analytics_table_df.append({
             'Report Name': a_file[:-4],
@@ -182,13 +208,10 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Above/Below Median': 'above',
             'Open Type': open_type,
             'Median Value': median_value_for_column,
-            'ACFO t=0': open_intraday_average_changes.iloc[0]['Avg Intraday Price Change When COT Field Above Median'],
-            'ACFO t+5': open_intraday_average_changes.iloc[4]['Avg Intraday Price Change When COT Field Above Median'],
-            'ACFO t+15': open_intraday_average_changes.iloc[14]['Avg Intraday Price Change When COT Field Above Median'],
             'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Above Median'],
-            'ACFO t+40': open_intraday_average_changes.iloc[39]['Avg Intraday Price Change When COT Field Above Median'],
-            'ACFO t+50': open_intraday_average_changes.iloc[49]['Avg Intraday Price Change When COT Field Above Median'],
-            'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median']
+            'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median'],
+            f"Intraday Price Change Standard Deviation at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
+                intraday_price_change_standard_deviations.above_median
         }, ignore_index=True)
         # Now capture below median stats
         cot_analytics_table_df = cot_analytics_table_df.append({
@@ -197,13 +220,10 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Above/Below Median': 'below',
             'Open Type': open_type,
             'Median Value': median_value_for_column,
-            'ACFO t=0': open_intraday_average_changes.iloc[0]['Avg Intraday Price Change When COT Field Below Median'],
-            'ACFO t+5': open_intraday_average_changes.iloc[4]['Avg Intraday Price Change When COT Field Below Median'],
-            'ACFO t+15': open_intraday_average_changes.iloc[14]['Avg Intraday Price Change When COT Field Below Median'],
             'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Below Median'],
-            'ACFO t+40': open_intraday_average_changes.iloc[39]['Avg Intraday Price Change When COT Field Below Median'],
-            'ACFO t+50': open_intraday_average_changes.iloc[49]['Avg Intraday Price Change When COT Field Below Median'],
-            'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median']
+            'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median'],
+            f"Intraday Price Change Standard Deviation at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
+                intraday_price_change_standard_deviations.below_median
         }, ignore_index=True)
     return cot_analytics_table_df
 
