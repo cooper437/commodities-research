@@ -210,7 +210,7 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Median Value': median_value_for_column,
             'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Above Median'],
             'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median'],
-            f"Intraday Price Change Standard Deviation at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
+            f"Std Deviation of Intraday Price Change at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
                 intraday_price_change_standard_deviations.above_median
         }, ignore_index=True)
         # Now capture below median stats
@@ -222,7 +222,7 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Median Value': median_value_for_column,
             'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Below Median'],
             'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median'],
-            f"Intraday Price Change Standard Deviation at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
+            f"Std Deviation of Intraday Price Change at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
                 intraday_price_change_standard_deviations.below_median
         }, ignore_index=True)
     return cot_analytics_table_df
