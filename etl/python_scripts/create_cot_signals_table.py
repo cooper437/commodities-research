@@ -56,7 +56,7 @@ def intraday_open_csv_to_df(filename) -> pd.DataFrame:
 
 def initialize_cot_analytics_table_df() -> pd.DataFrame:
     '''A dataframe that contains the structure needed for the analytics table that is output by the script'''
-    columns = ['Report Name', 'Field Name', 'Open Type', 'Above/Below Median', 'Median Value',
+    columns = ['Report Name', 'Field Name', 'Open Type', 'Above/Below Median', 'Median Value Of CoT Field',
                'ACFO t+30', 'ACFO t+60']
     initialized_df = pd.DataFrame(columns=columns)
     return initialized_df
@@ -252,7 +252,7 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Field Name': a_column,
             'Above/Below Median': 'above',
             'Open Type': open_type,
-            'Median Value': median_value_for_column,
+            'Median Value Of CoT Field': median_value_for_column,
             'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Above Median'],
             'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median'],
             f"Std Deviation of Intraday Price Change at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
@@ -268,7 +268,7 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Field Name': a_column,
             'Above/Below Median': 'below',
             'Open Type': open_type,
-            'Median Value': median_value_for_column,
+            'Median Value Of CoT Field': median_value_for_column,
             'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Below Median'],
             'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median'],
             f"Std Deviation of Intraday Price Change at Open t+{STANDARD_DEVIATION_MINUTE_OF_INTEREST}":
