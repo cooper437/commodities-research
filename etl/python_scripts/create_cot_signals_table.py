@@ -156,25 +156,27 @@ def calculate_std_deviation_at_open_minute_offset(intraday_minute_bars:  NamedTu
     return intraday_price_change_standard_deviation(above_median_standard_deviation, below_median_standard_deviation)
 
 
-def calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(intraday_minute_bars_df:  NamedTuple, open_minute_offset: int) -> dict:
+def calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
+    intraday_minute_bars_df:  NamedTuple,
+    open_minute_offset: int,
+    intraday_price_cfo_at_key_minute_median: float
+) -> dict:
     '''
     Calculate the percentage of rows that are above and below the median CFO value at a particular minute after the open
     '''
     intraday_price_change_at_minute_series = intraday_minute_bars_df[intraday_minute_bars_df[
         'Open Minutes Offset'] == open_minute_offset]['Price Change From Intraday Open']
-    intraday_price_change_at_minute_median = intraday_price_change_at_minute_series.median()
     total_series_length = intraday_price_change_at_minute_series.size
     num_rows_gte_median = intraday_price_change_at_minute_series[
-        intraday_price_change_at_minute_series >= intraday_price_change_at_minute_median].size
+        intraday_price_change_at_minute_series >= intraday_price_cfo_at_key_minute_median].size
     num_rows_lt_median = intraday_price_change_at_minute_series[
-        intraday_price_change_at_minute_series < intraday_price_change_at_minute_median].size
+        intraday_price_change_at_minute_series < intraday_price_cfo_at_key_minute_median].size
     pct_gte_median = round(
         (num_rows_gte_median / total_series_length) * 100, 4)
     pct_lt_median = round((num_rows_lt_median / total_series_length) * 100, 4)
     return {
         'pct_gte_median': pct_gte_median,
-        'pct_lt_median': pct_lt_median,
-        'intraday_price_change_at_minute_median': intraday_price_change_at_minute_median
+        'pct_lt_median': pct_lt_median
     }
 
 
@@ -255,6 +257,8 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
         os.path.join(COMMITMENT_OF_TRADERS_REPORTS_BASE_PATH, a_file))
     columns = csv_as_df.columns.values.tolist()
     reportable_columns = list(filter(is_nonreportable_column, columns))
+    intraday_price_cfo_at_key_minute_median = intraday_df[intraday_df['Open Minutes Offset'] ==
+                                                          KEY_OPEN_MINUTE_OF_INTEREST - 1]['Price Change From Intraday Open'].median()
     for i in trange(len(reportable_columns)):
         a_column = reportable_columns[i]
         median_value_for_column = csv_as_df[a_column].median()
@@ -274,10 +278,14 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
         minmax_acfo_stats = calculate_minmax_acfo(
             intraday_minute_bars=intraday_split_by_cot_df_median)
         above_below_cfo_stats_for_above_cot_median = calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
-            intraday_minute_bars_df=intraday_split_by_cot_df_median.above_median_df, open_minute_offset=KEY_OPEN_MINUTE_OF_INTEREST - 1
+            intraday_minute_bars_df=intraday_split_by_cot_df_median.above_median_df,
+            open_minute_offset=KEY_OPEN_MINUTE_OF_INTEREST - 1,
+            intraday_price_cfo_at_key_minute_median=intraday_price_cfo_at_key_minute_median
         )
         above_below_cfo_stats_for_below_cot_median = calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
-            intraday_minute_bars_df=intraday_split_by_cot_df_median.below_median_df, open_minute_offset=KEY_OPEN_MINUTE_OF_INTEREST - 1
+            intraday_minute_bars_df=intraday_split_by_cot_df_median.below_median_df,
+            open_minute_offset=KEY_OPEN_MINUTE_OF_INTEREST - 1,
+            intraday_price_cfo_at_key_minute_median=intraday_price_cfo_at_key_minute_median
         )
         # Capture above median stats
         cot_analytics_table_df = cot_analytics_table_df.append({
@@ -294,7 +302,7 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Min ACFO': minmax_acfo_stats['min_above_median_mean_acfo'],
             'Minute of Max ACFO': minmax_acfo_stats['minute_of_max_above_median_mean_acfo'],
             'Minute of Min ACFO': minmax_acfo_stats['minute_of_min_above_median_mean_acfo'],
-            'Median Intraday CFO Value t+60': above_below_cfo_stats_for_above_cot_median['intraday_price_change_at_minute_median'],
+            'Median Intraday CFO Value t+60': intraday_price_cfo_at_key_minute_median,
             'Percent GTE Median CFO t+60': above_below_cfo_stats_for_above_cot_median['pct_gte_median']
         }, ignore_index=True)
         # Now capture below median stats
@@ -312,7 +320,7 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Min ACFO': minmax_acfo_stats['min_below_median_mean_acfo'],
             'Minute of Max ACFO': minmax_acfo_stats['minute_of_max_below_median_mean_acfo'],
             'Minute of Min ACFO': minmax_acfo_stats['minute_of_min_below_median_mean_acfo'],
-            'Median Intraday CFO Value t+60': above_below_cfo_stats_for_below_cot_median['intraday_price_change_at_minute_median'],
+            'Median Intraday CFO Value t+60': intraday_price_cfo_at_key_minute_median,
             'Percent GTE Median CFO t+60': above_below_cfo_stats_for_below_cot_median['pct_gte_median']
         }, ignore_index=True)
     return cot_analytics_table_df
