@@ -12,7 +12,7 @@ CONTRACT_INTRADAY_SLIDING_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_sliding_open.csv')
 CONTRACT_INTRADAY_TRUE_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_true_open.csv')
-TARGET_FILENAME = 'nasdaq_cot_intraday_open_signals_correlation.csv'
+TARGET_FILENAME = '**.csv'
 TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
 
 # These parameters allow us to filter out trading activity on days where the contract DTE tends to have missing open bars
