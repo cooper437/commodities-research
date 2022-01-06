@@ -64,12 +64,12 @@ def filter_bars_for_dte_with_frequently_missing_open(
 
 
 def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
-    intraday_minute_bars:  NamedTuple
+    intraday_minute_bars_df:  NamedTuple
 ) -> pd.DataFrame:
     '''
     Group the intraday minute bars by their Open Minutes Offset and calculate the mean for each minute. Return all that as a single dataframe
     '''
-    intraday_price_change_by_minute_after_open = intraday_minute_bars.groupby(
+    intraday_price_change_by_minute_after_open = intraday_minute_bars_df.groupby(
         'Open Minutes Offset', as_index=False)['Price Change From Intraday Open'].mean()
     to_return_df = pd.DataFrame({
         'Open Minutes Offset': intraday_price_change_by_minute_after_open['Open Minutes Offset'],
@@ -78,7 +78,7 @@ def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
     return to_return_df
 
 
-def split_df_by_day_of_week(intraday_minute_bars: pd.DataFrame) -> dict:
+def split_df_by_day_of_week(intraday_minute_bars_df: pd.DataFrame) -> dict:
     '''
     Split the intraday minute bars by day of the week. Return a dict where each key is the number of the day of the week and
     the value is a dataframe containing the rows of intraday_minute_bars corresponding to that particular day of the week
@@ -86,13 +86,13 @@ def split_df_by_day_of_week(intraday_minute_bars: pd.DataFrame) -> dict:
     days_of_week = [*range(0, 7, 1)]
     intraday_dfs_grouped_by_day_of_week = {}
     for a_day in days_of_week:
-        a_single_days_df = intraday_minute_bars[intraday_minute_bars['DateTime'].dt.dayofweek == a_day]
+        a_single_days_df = intraday_minute_bars_df[intraday_minute_bars_df['DateTime'].dt.dayofweek == a_day]
         intraday_dfs_grouped_by_day_of_week[a_day] = a_single_days_df\
             .copy().reset_index()
     return intraday_dfs_grouped_by_day_of_week
 
 
-def split_df_by_month_of_year(intraday_minute_bars: pd.DataFrame) -> dict:
+def split_df_by_month_of_year(intraday_minute_bars_df: pd.DataFrame) -> dict:
     '''
     Split the intraday minute bars by month of the year. Return a dict where each key is the number of the month and
     the value is a dataframe containing the rows of intraday_minute_bars corresponding to that particular month
@@ -100,22 +100,22 @@ def split_df_by_month_of_year(intraday_minute_bars: pd.DataFrame) -> dict:
     months_of_year = [*range(1, 13, 1)]
     intraday_dfs_grouped_by_month = {}
     for a_month in months_of_year:
-        a_single_months_df = intraday_minute_bars[intraday_minute_bars['DateTime'].dt.month == a_month]
+        a_single_months_df = intraday_minute_bars_df[intraday_minute_bars_df['DateTime'].dt.month == a_month]
         intraday_dfs_grouped_by_month[a_month] = a_single_months_df\
             .copy().reset_index()
     return intraday_dfs_grouped_by_month
 
 
-def split_df_by_year(intraday_minute_bars: pd.DataFrame) -> dict:
+def split_df_by_year(intraday_minute_bars_df: pd.DataFrame) -> dict:
     '''
     Split the intraday minute bars by year. Return a dict where each key is the year and
     the value is a dataframe containing the rows of intraday_minute_bars corresponding to that particular year
     '''
-    distinct_years = intraday_minute_bars['DateTime'].dt.year\
+    distinct_years = intraday_minute_bars_df['DateTime'].dt.year\
         .drop_duplicates().to_list()
     intraday_dfs_grouped_by_year = {}
     for a_year in distinct_years:
-        a_single_years_df = intraday_minute_bars[intraday_minute_bars['DateTime'].dt.year == a_year]
+        a_single_years_df = intraday_minute_bars_df[intraday_minute_bars_df['DateTime'].dt.year == a_year]
         intraday_dfs_grouped_by_year[a_year] = a_single_years_df\
             .copy().reset_index()
     return intraday_dfs_grouped_by_year
@@ -149,6 +149,7 @@ def analyze_open_type(intraday_minute_bars_df: pd.DataFrame) -> pd.DataFrame:
         calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
         intraday_split_by_year
     )
+    print('Hello')
 
 
 # Script execution Starts Here
