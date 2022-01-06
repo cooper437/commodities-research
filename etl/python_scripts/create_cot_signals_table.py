@@ -15,7 +15,6 @@ import operator
 import pandas as pd
 from tqdm import trange
 import time
-import cytoolz
 
 CURRENT_DIR = os.path.dirname(__file__)
 PROCESSED_DATA_DIR = os.path.join(
@@ -28,6 +27,11 @@ CONTRACT_INTRADAY_TRUE_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_true_open.csv')
 TARGET_FILENAME = 'nasdaq_cot_intraday_open_signals_correlation.csv'
 TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
+
+# These parameters allow us to filter out trading activity on days where the contract DTE tends to have missing open bars
+FILTER_OUT_DTE_WITH_FREQUENTLY_MISSING_OPEN = True
+DTE_FILTER_UPPER_BOUNDARY = 140
+DTE_FILTER_LOWER_BOUNDARY = 25
 
 # A minute of particular interest that we calculate some additional statistics
 #  on like std deviation, and pct values above median
@@ -54,6 +58,17 @@ def intraday_open_csv_to_df(filename) -> pd.DataFrame:
         ]
     )
     return csv_as_df
+
+
+def filter_bars_for_dte_with_frequently_missing_open(
+    intraday_open_df: pd.DataFrame,
+    dte_filter_lower_boundary: int,
+    dte_filter_upper_boundary: int
+) -> pd.DataFrame:
+    '''Filter out days associated with a DTE that is often missing a true open bar'''
+    filtered_df = intraday_open_df[(intraday_open_df['DTE'] >= dte_filter_lower_boundary) & (
+        intraday_open_df['DTE'] <= dte_filter_upper_boundary)]
+    return filtered_df
 
 
 def initialize_cot_analytics_table_df() -> pd.DataFrame:
@@ -333,9 +348,23 @@ def build_target_df() -> pd.DataFrame:
     print("Loading the intraday sliding open dataframe into memory")
     intraday_sliding_open_df = intraday_open_csv_to_df(
         CONTRACT_INTRADAY_SLIDING_OPEN_FILE_PATH)
+    print(
+        f"Filtering SLIDING OPEN dataframe to exclude rows where DTE is not between {DTE_FILTER_LOWER_BOUNDARY} and {DTE_FILTER_UPPER_BOUNDARY}")
+    intraday_sliding_open_df = filter_bars_for_dte_with_frequently_missing_open(
+        intraday_open_df=intraday_sliding_open_df,
+        dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
+        dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
+    )
     print("Loading the intraday true open dataframe into memory")
     intraday_true_open_df = intraday_open_csv_to_df(
         CONTRACT_INTRADAY_TRUE_OPEN_FILE_PATH)
+    print(
+        f"Filtering TRUE OPEN dataframe to exclude rows where DTE is not between {DTE_FILTER_LOWER_BOUNDARY} and {DTE_FILTER_UPPER_BOUNDARY}")
+    intraday_true_open_df = filter_bars_for_dte_with_frequently_missing_open(
+        intraday_open_df=intraday_true_open_df,
+        dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
+        dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
+    )
     print("Adding 'Date Of Preceding Tuesday' column to sliding open dataframe")
     intraday_sliding_open_df['Date Of Preceding Tuesday'] = intraday_sliding_open_df['DateTime'].apply(
         date_of_preceding_tuesday)
