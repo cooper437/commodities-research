@@ -165,4 +165,12 @@ avg_changes_by_minute_true_open_grouped_by_day_of_week = valmap(
     calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
     intraday_true_open_grouped_by_day_of_week
 )
+avg_changes_by_minute_true_open_grouped_by_month_of_year = valmap(
+    calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
+    intraday_true_open_grouped_by_month
+)
+avg_changes_by_minute_true_open_grouped_by_year = valmap(
+    calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
+    intraday_true_open_grouped_by_year
+)
 print(intraday_true_open_grouped_by_day_of_week)
