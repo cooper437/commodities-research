@@ -1,4 +1,5 @@
 from typing import NamedTuple, List
+from cytoolz import valmap
 import pandas as pd
 import os
 import time
@@ -68,14 +69,11 @@ def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
     '''
     Group the intraday minute bars by their Open Minutes Offset and calculate the mean for each minute. Return all that as a single dataframe
     '''
-    intraday_above_median_cot_field_df = intraday_minute_bars.above_median_df.groupby(
-        'Open Minutes Offset', as_index=False)['Price Change From Intraday Open'].mean()
-    intraday_below_median_cot_field_df = intraday_minute_bars.below_median_df.groupby(
+    intraday_price_change_by_minute_after_open = intraday_minute_bars.groupby(
         'Open Minutes Offset', as_index=False)['Price Change From Intraday Open'].mean()
     to_return_df = pd.DataFrame({
-        'Open Minutes Offset': intraday_above_median_cot_field_df['Open Minutes Offset'],
-        'Avg Intraday Price Change When COT Field Above Median': intraday_above_median_cot_field_df['Price Change From Intraday Open'],
-        'Avg Intraday Price Change When COT Field Below Median': intraday_below_median_cot_field_df['Price Change From Intraday Open']
+        'Open Minutes Offset': intraday_price_change_by_minute_after_open['Open Minutes Offset'],
+        'Mean Intraday Price Change': intraday_price_change_by_minute_after_open['Price Change From Intraday Open']
     })
     return to_return_df
 
@@ -96,6 +94,8 @@ def group_df_by_day_of_week(intraday_minute_bars: pd.DataFrame) -> dict:
 
 def group_df_by_month_of_year(intraday_minute_bars: pd.DataFrame) -> dict:
     '''
+    Group the intraday minute bars by month of the year. Return a dict where each key is the number of the month and
+    the value is a dataframe containing the rows of intraday_minute_bars corresponding to that particular month
     '''
     months_of_year = [*range(1, 13, 1)]
     intraday_dfs_grouped_by_month = {}
@@ -108,6 +108,8 @@ def group_df_by_month_of_year(intraday_minute_bars: pd.DataFrame) -> dict:
 
 def group_df_by_year(intraday_minute_bars: pd.DataFrame) -> dict:
     '''
+    Group the intraday minute bars by year. Return a dict where each key is the year and
+    the value is a dataframe containing the rows of intraday_minute_bars corresponding to that particular year
     '''
     distinct_years = intraday_minute_bars['DateTime'].dt.year\
         .drop_duplicates().to_list()
@@ -145,10 +147,22 @@ intraday_true_open_df = filter_bars_for_dte_with_frequently_missing_open(
     dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
     dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
 )
+# Initialize our output dataframes one for each time interval
 day_of_week_target_df = initialize_target_table_df(
     ReportTimeInterval.day_of_week)
-intraday_true_open_by_day_of_week = group_df_by_day_of_week(
+month_of_year_target_df = initialize_target_table_df(
+    ReportTimeInterval.month)
+year_target_df = initialize_target_table_df(
+    ReportTimeInterval.year)
+# Split our dataframes apart in grouping the day, month, and year respectively
+intraday_true_open_grouped_by_day_of_week = group_df_by_day_of_week(
     intraday_true_open_df)
-intraday_true_open_by_month = group_df_by_month_of_year(intraday_true_open_df)
-intraday_true_open_by_year = group_df_by_year(intraday_true_open_df)
-print(intraday_true_open_by_day_of_week)
+intraday_true_open_grouped_by_month = group_df_by_month_of_year(
+    intraday_true_open_df)
+intraday_true_open_grouped_by_year = group_df_by_year(intraday_true_open_df)
+# Use our split dataframes to generate a new dataframe showing the average intraday price change at each minute after the open
+avg_changes_by_minute_true_open_grouped_by_day_of_week = valmap(
+    calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
+    intraday_true_open_grouped_by_day_of_week
+)
+print(intraday_true_open_grouped_by_day_of_week)
