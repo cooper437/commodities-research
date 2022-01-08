@@ -137,15 +137,15 @@ def analyze_open_type(intraday_minute_bars_df: pd.DataFrame) -> pd.DataFrame:
     intraday_split_by_year = split_df_by_year(
         intraday_minute_bars_df)
     # Use our split dataframes to generate a new dataframe showing the average intraday price change at each minute after the open
-    avg_changes_by_minute_true_open_split_by_day_of_week = valmap(
+    avg_changes_grouped_by_minute_split_by_day_of_week = valmap(
         calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
         intraday_split_by_day_of_week
     )
-    avg_changes_by_minute_true_open_split_by_month_of_year = valmap(
+    avg_changes_grouped_by_minute_split_by_month_of_year = valmap(
         calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
         intraday_split_by_month
     )
-    avg_changes_by_minute_true_open_split_by_year = valmap(
+    avg_changes_grouped_by_minute_split_by_year = valmap(
         calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
         intraday_split_by_year
     )
