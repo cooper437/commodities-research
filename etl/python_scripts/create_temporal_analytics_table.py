@@ -47,8 +47,9 @@ def intraday_open_csv_to_df(filename) -> pd.DataFrame:
 def initialize_target_table_df(report_time_interval: ReportTimeInterval) -> pd.DataFrame:
     '''A dataframe that contains the structure needed for the analytics table that is output by the script'''
     time_interval_column_label = report_time_interval.name
-    columns = [time_interval_column_label, 'Open Type', 'ACFO t+30', 'ACFO t+60', f"Std Deviation of Intraday Price Change at Open t+{KEY_OPEN_MINUTE_OF_INTEREST}", 'Max ACFO',
-               'Min ACFO', 'Minute of Max ACFO', 'Minute of Min ACFO', 'Median Intraday CFO Value t+60', 'Percent GTE Median CFO t+60']
+    # columns = [time_interval_column_label, 'Open Type', 'ACFO t+30', 'ACFO t+60', f"Std Deviation of Intraday Price Change at Open t+{KEY_OPEN_MINUTE_OF_INTEREST}", 'Max ACFO',
+    #            'Min ACFO', 'Minute of Max ACFO', 'Minute of Min ACFO', 'Median Intraday CFO Value t+60', 'Percent GTE Median CFO t+60']
+    columns = [time_interval_column_label, 'open_type']
     initialized_df = pd.DataFrame(columns=columns)
     return initialized_df
 
@@ -87,11 +88,12 @@ def split_df_by_day_of_week(intraday_minute_bars_df: pd.DataFrame) -> dict:
     Split the intraday minute bars by day of the week. Return a dict where each key is the number of the day of the week and
     the value is a dataframe containing the rows of intraday_minute_bars corresponding to that particular day of the week
     '''
-    days_of_week = [*range(0, 7, 1)]
+    days_of_week = {0: 'Monday', 1: 'Tuesday', 2: 'Wednesday',
+                    3: 'Thursday', 4: 'Friday', 5: 'Saturday', 6: 'Sunday'}
     intraday_dfs_grouped_by_day_of_week = {}
-    for a_day in days_of_week:
+    for a_day in list(days_of_week.keys()):
         a_single_days_df = intraday_minute_bars_df[intraday_minute_bars_df['DateTime'].dt.dayofweek == a_day]
-        intraday_dfs_grouped_by_day_of_week[a_day] = a_single_days_df\
+        intraday_dfs_grouped_by_day_of_week[days_of_week[a_day]] = a_single_days_df\
             .copy().reset_index()
     return intraday_dfs_grouped_by_day_of_week
 
@@ -145,32 +147,6 @@ def calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
     return pct_gte_median
 
 
-# def calculate_minmax_acfo(intraday_minute_bars:  NamedTuple) -> dict:
-#     open_minutes = [*range(0, 60, 1)]
-#     minute_of_max_acfo = None
-#     minute_of_min_acfo = None
-#     max_acfo = None
-#     min_acfo = None
-#     # Iteratve over each minute of the open and determine the max and min acfo and minute they occured
-#     # Do this for trading days that are both above and below the median of the CoT field respectively
-#     for minute in open_minutes:
-#         mean_acfo_at_minute = above_median_df[above_median_df['Open Minutes Offset']
-#                                               == minute]['Price Change From Intraday Open'].mean()
-#         if (max_acfo is None) or (mean_acfo_at_minute >= max_acfo):
-#             max_acfo = mean_acfo_at_minute
-#             minute_of_max_acfo = minute
-#         if (min_acfo is None) or (mean_acfo_at_minute <= min_acfo):
-#             min_acfo = mean_acfo_at_minute
-#             minute_of_min_acfo = minute
-#     minmax_acfo_stats = {
-#         'minute_of_max_above_median_mean_acfo': minute_of_max_acfo,
-#         'minute_of_min_above_median_mean_acfo': minute_of_min_acfo,
-#         'max_above_median_mean_acfo': max_acfo,
-#         'min_above_median_mean_acfo': min_acfo,
-#     }
-#     return minmax_acfo_stats
-
-
 def calculate_minmax_acfo(avg_changes_by_minute_after_open_df:  NamedTuple) -> dict:
     max_minute = avg_changes_by_minute_after_open_df.iloc[
         avg_changes_by_minute_after_open_df['Mean Intraday Price Change'].idxmax()]
@@ -222,13 +198,6 @@ def gather_temporal_statistics_on_open(
 
 
 def analyze_open_type(intraday_minute_bars_df: pd.DataFrame) -> pd.DataFrame:
-    # Initialize our output dataframes one for each time interval
-    day_of_week_target_df = initialize_target_table_df(
-        ReportTimeInterval.day_of_week)
-    month_of_year_target_df = initialize_target_table_df(
-        ReportTimeInterval.month)
-    year_target_df = initialize_target_table_df(
-        ReportTimeInterval.year)
     median_cfo_value_at_t_sixty_for_whole_dataset = intraday_minute_bars_df[intraday_minute_bars_df[
         'Open Minutes Offset'] == 59]['Price Change From Intraday Open'].median()
     # Split our dataframes apart in grouping the day, month, and year respectively
@@ -279,7 +248,48 @@ def analyze_open_type(intraday_minute_bars_df: pd.DataFrame) -> pd.DataFrame:
     }
 
 
-# Script execution Starts Here
+def merge_daily_stats_into_df(true_open_daily, sliding_open_daily) -> pd.DataFrame:
+    day_of_week_target_df = initialize_target_table_df(
+        ReportTimeInterval.day_of_week)
+    # Append true open dicts to the dataframe
+    for key, value in true_open_daily.items():
+        day_of_week_target_df = day_of_week_target_df.append(
+            {**value, 'day_of_week': key, 'open_type': 'true_open'}, ignore_index=True)
+    # Append sliding open dicts to the dataframe
+    for key, value in sliding_open_daily.items():
+        day_of_week_target_df = day_of_week_target_df.append(
+            {**value, 'day_of_week': key, 'open_type': 'sliding_open'}, ignore_index=True)
+    return day_of_week_target_df
+
+
+def merge_monthly_stats_into_df(true_open_monthly, sliding_open_monthly) -> pd.DataFrame:
+    monthly_target_df = initialize_target_table_df(
+        ReportTimeInterval.month)
+    # Append true open dicts to the dataframe
+    for key, value in true_open_monthly.items():
+        monthly_target_df = monthly_target_df.append(
+            {**value, 'month': key, 'open_type': 'true_open'}, ignore_index=True)
+    # Append sliding open dicts to the dataframe
+    for key, value in sliding_open_monthly.items():
+        monthly_target_df = monthly_target_df.append(
+            {**value, 'month': key, 'open_type': 'sliding_open'}, ignore_index=True)
+    return monthly_target_df
+
+
+def merge_yearly_stats_into_df(true_open_yearly, sliding_open_yearly) -> pd.DataFrame:
+    yearly_target_df = initialize_target_table_df(
+        ReportTimeInterval.year)
+    # Append true open dicts to the dataframe
+    for key, value in true_open_yearly.items():
+        yearly_target_df = yearly_target_df.append(
+            {**value, 'year': key, 'open_type': 'true_open'}, ignore_index=True)
+    # Append sliding open dicts to the dataframe
+    for key, value in sliding_open_yearly.items():
+        yearly_target_df = yearly_target_df.append(
+            {**value, 'year': key, 'open_type': 'sliding_open'}, ignore_index=True)
+    return yearly_target_df
+
+    # Script execution Starts Here
 target_file_exists = os.path.exists(TARGET_FILE_DEST)
 if target_file_exists:
     print('The target file already exists and will be overwritten. Abort in the next 5 seconds to cancel.')
@@ -307,4 +317,21 @@ intraday_true_open_df = filter_bars_for_dte_with_frequently_missing_open(
     dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
     dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
 )
-analyze_open_type(intraday_minute_bars_df=intraday_true_open_df)
+true_open_stats = analyze_open_type(
+    intraday_minute_bars_df=intraday_true_open_df)
+sliding_open_stats = analyze_open_type(
+    intraday_minute_bars_df=intraday_sliding_open_df
+)
+day_of_week_target_df = merge_daily_stats_into_df(
+    true_open_daily=true_open_stats['by_day_of_week'],
+    sliding_open_daily=sliding_open_stats['by_day_of_week']
+)
+monthly_target_df = merge_monthly_stats_into_df(
+    true_open_monthly=true_open_stats['by_month'],
+    sliding_open_monthly=sliding_open_stats['by_month']
+)
+yearly_target_df = merge_monthly_stats_into_df(
+    true_open_monthly=true_open_stats['by_year'],
+    sliding_open_monthly=sliding_open_stats['by_year']
+)
+print('hello')
