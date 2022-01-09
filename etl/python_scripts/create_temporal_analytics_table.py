@@ -54,8 +54,6 @@ def intraday_open_csv_to_df(filename) -> pd.DataFrame:
 def initialize_target_table_df(report_time_interval: ReportTimeInterval) -> pd.DataFrame:
     '''A dataframe that contains the structure needed for the analytics table that is output by the script'''
     time_interval_column_label = report_time_interval.value
-    # columns = [time_interval_column_label, 'Open Type', 'ACFO t+30', 'ACFO t+60', f"Std Deviation of Intraday Price Change at Open t+{KEY_OPEN_MINUTE_OF_INTEREST}", 'Max ACFO',
-    #            'Min ACFO', 'Minute of Max ACFO', 'Minute of Min ACFO', 'Median Intraday CFO Value t+60', 'Percent GTE Median CFO t+60']
     columns = [time_interval_column_label, 'Open Type']
     initialized_df = pd.DataFrame(columns=columns)
     return initialized_df
