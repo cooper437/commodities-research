@@ -1,6 +1,7 @@
 from typing import NamedTuple, List
 from cytoolz import valmap
 import pandas as pd
+import numpy as np
 import os
 import time
 import enum
@@ -69,7 +70,10 @@ def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
     '''
     Group the intraday minute bars by their Open Minutes Offset and calculate the mean for each minute. Return all that as a single dataframe
     '''
-    intraday_price_change_by_minute_after_open = intraday_minute_bars_df.groupby(
+    # First filter out all rows where Open Minutes Offset equals 60 because these are really the 61st minute after open which is outside the open window
+    intraday_minute_bars_df_filtered = intraday_minute_bars_df[
+        intraday_minute_bars_df['Open Minutes Offset'] != 60]
+    intraday_price_change_by_minute_after_open = intraday_minute_bars_df_filtered.groupby(
         'Open Minutes Offset', as_index=False)['Price Change From Intraday Open'].mean()
     to_return_df = pd.DataFrame({
         'Open Minutes Offset': intraday_price_change_by_minute_after_open['Open Minutes Offset'],
@@ -121,6 +125,91 @@ def split_df_by_year(intraday_minute_bars_df: pd.DataFrame) -> dict:
     return intraday_dfs_grouped_by_year
 
 
+def calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
+    intraday_minute_bars_df:  NamedTuple,
+    open_minute_offset: int,
+    intraday_price_cfo_at_key_minute_median: np.float64
+) -> dict:
+    '''
+    Calculate the percentage of rows that are above and below the median CFO value at a particular minute after the open
+    '''
+    intraday_price_change_at_minute_series = intraday_minute_bars_df[intraday_minute_bars_df[
+        'Open Minutes Offset'] == open_minute_offset]['Price Change From Intraday Open']
+    total_series_length = intraday_price_change_at_minute_series.size
+    num_rows_gte_median = intraday_price_change_at_minute_series[
+        intraday_price_change_at_minute_series >= intraday_price_cfo_at_key_minute_median].size
+    num_rows_lt_median = intraday_price_change_at_minute_series[
+        intraday_price_change_at_minute_series < intraday_price_cfo_at_key_minute_median].size
+    pct_gte_median = round(
+        (num_rows_gte_median / total_series_length) * 100, 4)
+    return pct_gte_median
+
+
+# def calculate_minmax_acfo(intraday_minute_bars:  NamedTuple) -> dict:
+#     open_minutes = [*range(0, 60, 1)]
+#     minute_of_max_acfo = None
+#     minute_of_min_acfo = None
+#     max_acfo = None
+#     min_acfo = None
+#     # Iteratve over each minute of the open and determine the max and min acfo and minute they occured
+#     # Do this for trading days that are both above and below the median of the CoT field respectively
+#     for minute in open_minutes:
+#         mean_acfo_at_minute = above_median_df[above_median_df['Open Minutes Offset']
+#                                               == minute]['Price Change From Intraday Open'].mean()
+#         if (max_acfo is None) or (mean_acfo_at_minute >= max_acfo):
+#             max_acfo = mean_acfo_at_minute
+#             minute_of_max_acfo = minute
+#         if (min_acfo is None) or (mean_acfo_at_minute <= min_acfo):
+#             min_acfo = mean_acfo_at_minute
+#             minute_of_min_acfo = minute
+#     minmax_acfo_stats = {
+#         'minute_of_max_above_median_mean_acfo': minute_of_max_acfo,
+#         'minute_of_min_above_median_mean_acfo': minute_of_min_acfo,
+#         'max_above_median_mean_acfo': max_acfo,
+#         'min_above_median_mean_acfo': min_acfo,
+#     }
+#     return minmax_acfo_stats
+
+
+def calculate_minmax_acfo(avg_changes_by_minute_after_open_df:  NamedTuple) -> dict:
+    max_minute = avg_changes_by_minute_after_open_df.iloc[
+        avg_changes_by_minute_after_open_df['Mean Intraday Price Change'].idxmax()]
+    min_minute = avg_changes_by_minute_after_open_df.iloc[
+        avg_changes_by_minute_after_open_df['Mean Intraday Price Change'].idxmin()]
+    return {
+        'minute_of_max_acfo': max_minute['Open Minutes Offset'],
+        'minute_of_min_acfo': min_minute['Open Minutes Offset'],
+        'max_acfo': max_minute['Mean Intraday Price Change'],
+        'min_acfo': min_minute['Mean Intraday Price Change']
+    }
+
+
+def gather_temporal_statistics_on_open(
+    avg_changes_by_minute_after_open_df: pd.DataFrame,
+    intraday_minute_bars_df: pd.DataFrame,
+    median_cfo_value_at_t_sixty_for_whole_dataset: np.float64
+) -> pd.DataFrame:
+    acfo_at_thirty_mins = avg_changes_by_minute_after_open_df[avg_changes_by_minute_after_open_df[
+        'Open Minutes Offset'] == 29]['Mean Intraday Price Change'].iloc[0]
+    acfo_at_sixty_mins = avg_changes_by_minute_after_open_df[avg_changes_by_minute_after_open_df[
+        'Open Minutes Offset'] == 59]['Mean Intraday Price Change'].iloc[0]
+    std_deviation_at_t_sixty = intraday_minute_bars_df[intraday_minute_bars_df[
+        'Open Minutes Offset'] == 59]['Price Change From Intraday Open'].std()
+    pct_above_median_at_t_sixty = calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
+        intraday_minute_bars_df=intraday_minute_bars_df,
+        open_minute_offset=59,
+        intraday_price_cfo_at_key_minute_median=median_cfo_value_at_t_sixty_for_whole_dataset
+    )
+    min_max_acfo = calculate_minmax_acfo(avg_changes_by_minute_after_open_df)
+    return {
+        'acfo_at_thirty_mins': acfo_at_thirty_mins,
+        'acfo_at_sixty_mins': acfo_at_sixty_mins,
+        'std_deviation_at_t_sixty': std_deviation_at_t_sixty,
+        'pct_above_median_at_t_sixty': pct_above_median_at_t_sixty,
+        **min_max_acfo
+    }
+
+
 def analyze_open_type(intraday_minute_bars_df: pd.DataFrame) -> pd.DataFrame:
     # Initialize our output dataframes one for each time interval
     day_of_week_target_df = initialize_target_table_df(
@@ -129,6 +218,8 @@ def analyze_open_type(intraday_minute_bars_df: pd.DataFrame) -> pd.DataFrame:
         ReportTimeInterval.month)
     year_target_df = initialize_target_table_df(
         ReportTimeInterval.year)
+    median_cfo_value_at_t_sixty_for_whole_dataset = intraday_minute_bars_df[intraday_minute_bars_df[
+        'Open Minutes Offset'] == 59]['Price Change From Intraday Open'].median()
     # Split our dataframes apart in grouping the day, month, and year respectively
     intraday_split_by_day_of_week = split_df_by_day_of_week(
         intraday_minute_bars_df)
@@ -149,7 +240,13 @@ def analyze_open_type(intraday_minute_bars_df: pd.DataFrame) -> pd.DataFrame:
         calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
         intraday_split_by_year
     )
-    print('Hello')
+    temporal_open_stats = gather_temporal_statistics_on_open(
+        avg_changes_by_minute_after_open_df=avg_changes_grouped_by_minute_split_by_day_of_week[
+            1],
+        intraday_minute_bars_df=intraday_split_by_day_of_week[1],
+        median_cfo_value_at_t_sixty_for_whole_dataset=median_cfo_value_at_t_sixty_for_whole_dataset
+    )
+    print('hello')
 
 
 # Script execution Starts Here
