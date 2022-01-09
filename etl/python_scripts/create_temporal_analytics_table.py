@@ -1,10 +1,10 @@
-from typing import NamedTuple, List
-from cytoolz import valmap, itemmap, keymap
-import pandas as pd
-import numpy as np
-import os
-import time
 import enum
+import time
+import os
+import numpy as np
+import pandas as pd
+from cytoolz import valmap, itemmap, keymap
+from typing import NamedTuple, List
 
 CURRENT_DIR = os.path.dirname(__file__)
 PROCESSED_DATA_DIR = os.path.join(
@@ -13,8 +13,15 @@ CONTRACT_INTRADAY_SLIDING_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_sliding_open.csv')
 CONTRACT_INTRADAY_TRUE_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_true_open.csv')
-TARGET_FILENAME = '**.csv'
-TARGET_FILE_DEST = os.path.join(PROCESSED_DATA_DIR, TARGET_FILENAME)
+TARGET_FILENAME_BY_MONTH = 'temporal_intraday_open_analytics_by_month.csv'
+TARGET_FILENAME_BY_YEAR = 'temporal_intraday_open_analytics_by_year.csv'
+TARGET_FILENAME_BY_DAY = 'temporal_intraday_open_analytics_by_day.csv'
+TARGET_FILE_DEST_BY_MONTH = os.path.join(
+    PROCESSED_DATA_DIR, TARGET_FILENAME_BY_MONTH)
+TARGET_FILE_DEST_BY_YEAR = os.path.join(
+    PROCESSED_DATA_DIR, TARGET_FILENAME_BY_YEAR)
+TARGET_FILE_DEST_BY_DAY = os.path.join(
+    PROCESSED_DATA_DIR, TARGET_FILENAME_BY_DAY)
 
 # These parameters allow us to filter out trading activity on days where the contract DTE tends to have missing open bars
 FILTER_OUT_DTE_WITH_FREQUENTLY_MISSING_OPEN = True
@@ -289,8 +296,9 @@ def merge_yearly_stats_into_df(true_open_yearly, sliding_open_yearly) -> pd.Data
             {**value, 'Year': key, 'Open Type': 'sliding_open'}, ignore_index=True)
     return yearly_target_df
 
+
     # Script execution Starts Here
-target_file_exists = os.path.exists(TARGET_FILE_DEST)
+target_file_exists = os.path.exists(TARGET_FILE_DEST_BY_DAY)
 if target_file_exists:
     print('The target file already exists and will be overwritten. Abort in the next 5 seconds to cancel.')
     time.sleep(5)
@@ -334,4 +342,10 @@ yearly_target_df = merge_monthly_stats_into_df(
     true_open_monthly=true_open_stats['by_year'],
     sliding_open_monthly=sliding_open_stats['by_year']
 )
-print('hello')
+print(f"Saving by day target csv to {TARGET_FILE_DEST_BY_DAY}")
+day_of_week_target_df.to_csv(TARGET_FILE_DEST_BY_DAY, index=False)
+print(f"Saving by month target csv to {TARGET_FILE_DEST_BY_MONTH}")
+monthly_target_df.to_csv(TARGET_FILE_DEST_BY_MONTH, index=False)
+print(f"Saving by year target csv to {TARGET_FILE_DEST_BY_YEAR}")
+yearly_target_df.to_csv(TARGET_FILE_DEST_BY_YEAR, index=False)
+print('Done')
