@@ -1,5 +1,5 @@
 from typing import NamedTuple, List
-from cytoolz import valmap
+from cytoolz import valmap, itemmap, keymap
 import pandas as pd
 import numpy as np
 import os
@@ -189,6 +189,17 @@ def gather_temporal_statistics_on_open(
     intraday_minute_bars_df: pd.DataFrame,
     median_cfo_value_at_t_sixty_for_whole_dataset: np.float64
 ) -> pd.DataFrame:
+    if avg_changes_by_minute_after_open_df.empty:
+        return {
+            'acfo_at_thirty_mins': None,
+            'acfo_at_sixty_mins': None,
+            'std_deviation_at_t_sixty': None,
+            'pct_above_median_at_t_sixty': None,
+            'minute_of_max_acfo': None,
+            'minute_of_min_acfo': None,
+            'max_acfo': None,
+            'min_acfo': None
+        }
     acfo_at_thirty_mins = avg_changes_by_minute_after_open_df[avg_changes_by_minute_after_open_df[
         'Open Minutes Offset'] == 29]['Mean Intraday Price Change'].iloc[0]
     acfo_at_sixty_mins = avg_changes_by_minute_after_open_df[avg_changes_by_minute_after_open_df[
@@ -240,13 +251,32 @@ def analyze_open_type(intraday_minute_bars_df: pd.DataFrame) -> pd.DataFrame:
         calculate_average_intraday_price_change_grouped_by_open_minutes_offset,
         intraday_split_by_year
     )
-    temporal_open_stats = gather_temporal_statistics_on_open(
-        avg_changes_by_minute_after_open_df=avg_changes_grouped_by_minute_split_by_day_of_week[
-            1],
-        intraday_minute_bars_df=intraday_split_by_day_of_week[1],
-        median_cfo_value_at_t_sixty_for_whole_dataset=median_cfo_value_at_t_sixty_for_whole_dataset
-    )
-    print('hello')
+    temporal_open_stats_split_by_day_of_week = {}
+    temporal_open_stats_split_by_month = {}
+    temporal_open_stats_split_by_year = {}
+    for key, value in avg_changes_grouped_by_minute_split_by_day_of_week.items():
+        temporal_open_stats_split_by_day_of_week[key] = gather_temporal_statistics_on_open(
+            avg_changes_by_minute_after_open_df=value,
+            intraday_minute_bars_df=intraday_split_by_day_of_week[key],
+            median_cfo_value_at_t_sixty_for_whole_dataset=median_cfo_value_at_t_sixty_for_whole_dataset
+        )
+    for key, value in avg_changes_grouped_by_minute_split_by_month_of_year.items():
+        temporal_open_stats_split_by_month[key] = gather_temporal_statistics_on_open(
+            avg_changes_by_minute_after_open_df=value,
+            intraday_minute_bars_df=intraday_split_by_month[key],
+            median_cfo_value_at_t_sixty_for_whole_dataset=median_cfo_value_at_t_sixty_for_whole_dataset
+        )
+    for key, value in avg_changes_grouped_by_minute_split_by_year.items():
+        temporal_open_stats_split_by_year[key] = gather_temporal_statistics_on_open(
+            avg_changes_by_minute_after_open_df=value,
+            intraday_minute_bars_df=intraday_split_by_year[key],
+            median_cfo_value_at_t_sixty_for_whole_dataset=median_cfo_value_at_t_sixty_for_whole_dataset
+        )
+    return {
+        'by_day_of_week': temporal_open_stats_split_by_day_of_week,
+        'by_month': temporal_open_stats_split_by_month,
+        'by_year': temporal_open_stats_split_by_year
+    }
 
 
 # Script execution Starts Here
@@ -264,6 +294,8 @@ intraday_sliding_open_df = filter_bars_for_dte_with_frequently_missing_open(
     intraday_open_df=intraday_sliding_open_df,
     dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
     dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
+
+
 )
 print("Loading the intraday true open dataframe into memory")
 intraday_true_open_df = intraday_open_csv_to_df(
