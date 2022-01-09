@@ -27,9 +27,9 @@ KEY_OPEN_MINUTE_OF_INTEREST = 60
 
 
 class ReportTimeInterval(enum.Enum):
-    day_of_week = 1
-    month = 2
-    year = 3
+    day_of_week = 'Day Of Week'
+    month = 'Month'
+    year = 'Year'
 
 
 def intraday_open_csv_to_df(filename) -> pd.DataFrame:
@@ -46,7 +46,7 @@ def intraday_open_csv_to_df(filename) -> pd.DataFrame:
 
 def initialize_target_table_df(report_time_interval: ReportTimeInterval) -> pd.DataFrame:
     '''A dataframe that contains the structure needed for the analytics table that is output by the script'''
-    time_interval_column_label = report_time_interval.name
+    time_interval_column_label = report_time_interval.value
     # columns = [time_interval_column_label, 'Open Type', 'ACFO t+30', 'ACFO t+60', f"Std Deviation of Intraday Price Change at Open t+{KEY_OPEN_MINUTE_OF_INTEREST}", 'Max ACFO',
     #            'Min ACFO', 'Minute of Max ACFO', 'Minute of Min ACFO', 'Median Intraday CFO Value t+60', 'Percent GTE Median CFO t+60']
     columns = [time_interval_column_label, 'Open Type']
@@ -254,11 +254,11 @@ def merge_daily_stats_into_df(true_open_daily, sliding_open_daily) -> pd.DataFra
     # Append true open dicts to the dataframe
     for key, value in true_open_daily.items():
         day_of_week_target_df = day_of_week_target_df.append(
-            {**value, 'day_of_week': key, 'Open Type': 'true_open'}, ignore_index=True)
+            {**value, 'Day Of Week': key, 'Open Type': 'true_open'}, ignore_index=True)
     # Append sliding open dicts to the dataframe
     for key, value in sliding_open_daily.items():
         day_of_week_target_df = day_of_week_target_df.append(
-            {**value, 'day_of_week': key, 'Open Type': 'sliding_open'}, ignore_index=True)
+            {**value, 'Day Of Week': key, 'Open Type': 'sliding_open'}, ignore_index=True)
     return day_of_week_target_df
 
 
@@ -268,11 +268,11 @@ def merge_monthly_stats_into_df(true_open_monthly, sliding_open_monthly) -> pd.D
     # Append true open dicts to the dataframe
     for key, value in true_open_monthly.items():
         monthly_target_df = monthly_target_df.append(
-            {**value, 'month': key, 'Open Type': 'true_open'}, ignore_index=True)
+            {**value, 'Month': key, 'Open Type': 'true_open'}, ignore_index=True)
     # Append sliding open dicts to the dataframe
     for key, value in sliding_open_monthly.items():
         monthly_target_df = monthly_target_df.append(
-            {**value, 'month': key, 'Open Type': 'sliding_open'}, ignore_index=True)
+            {**value, 'Month': key, 'Open Type': 'sliding_open'}, ignore_index=True)
     return monthly_target_df
 
 
@@ -282,11 +282,11 @@ def merge_yearly_stats_into_df(true_open_yearly, sliding_open_yearly) -> pd.Data
     # Append true open dicts to the dataframe
     for key, value in true_open_yearly.items():
         yearly_target_df = yearly_target_df.append(
-            {**value, 'year': key, 'Open Type': 'true_open'}, ignore_index=True)
+            {**value, 'Year': key, 'Open Type': 'true_open'}, ignore_index=True)
     # Append sliding open dicts to the dataframe
     for key, value in sliding_open_yearly.items():
         yearly_target_df = yearly_target_df.append(
-            {**value, 'year': key, 'Open Type': 'sliding_open'}, ignore_index=True)
+            {**value, 'Year': key, 'Open Type': 'sliding_open'}, ignore_index=True)
     return yearly_target_df
 
     # Script execution Starts Here
