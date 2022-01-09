@@ -49,7 +49,7 @@ def initialize_target_table_df(report_time_interval: ReportTimeInterval) -> pd.D
     time_interval_column_label = report_time_interval.name
     # columns = [time_interval_column_label, 'Open Type', 'ACFO t+30', 'ACFO t+60', f"Std Deviation of Intraday Price Change at Open t+{KEY_OPEN_MINUTE_OF_INTEREST}", 'Max ACFO',
     #            'Min ACFO', 'Minute of Max ACFO', 'Minute of Min ACFO', 'Median Intraday CFO Value t+60', 'Percent GTE Median CFO t+60']
-    columns = [time_interval_column_label, 'open_type']
+    columns = [time_interval_column_label, 'Open Type']
     initialized_df = pd.DataFrame(columns=columns)
     return initialized_df
 
@@ -153,10 +153,10 @@ def calculate_minmax_acfo(avg_changes_by_minute_after_open_df:  NamedTuple) -> d
     min_minute = avg_changes_by_minute_after_open_df.iloc[
         avg_changes_by_minute_after_open_df['Mean Intraday Price Change'].idxmin()]
     return {
-        'minute_of_max_acfo': max_minute['Open Minutes Offset'],
-        'minute_of_min_acfo': min_minute['Open Minutes Offset'],
-        'max_acfo': max_minute['Mean Intraday Price Change'],
-        'min_acfo': min_minute['Mean Intraday Price Change']
+        'Minute of Max ACFO': max_minute['Open Minutes Offset'],
+        'Minute of Min ACFO': min_minute['Open Minutes Offset'],
+        'Max ACFO': max_minute['Mean Intraday Price Change'],
+        'Min ACFO': min_minute['Mean Intraday Price Change']
     }
 
 
@@ -167,14 +167,14 @@ def gather_temporal_statistics_on_open(
 ) -> pd.DataFrame:
     if avg_changes_by_minute_after_open_df.empty:
         return {
-            'acfo_at_thirty_mins': None,
-            'acfo_at_sixty_mins': None,
-            'std_deviation_at_t_sixty': None,
-            'pct_above_median_at_t_sixty': None,
-            'minute_of_max_acfo': None,
-            'minute_of_min_acfo': None,
-            'max_acfo': None,
-            'min_acfo': None
+            'ACFO t+30': None,
+            'ACFO t+60': None,
+            'Std Deviation of Intraday Price Change at Open t+60': None,
+            'Percent GTE Median CFO t+60': None,
+            'Minute of Max ACFO': None,
+            'Minute of Min ACFO': None,
+            'Max ACFO': None,
+            'Min ACFO': None
         }
     acfo_at_thirty_mins = avg_changes_by_minute_after_open_df[avg_changes_by_minute_after_open_df[
         'Open Minutes Offset'] == 29]['Mean Intraday Price Change'].iloc[0]
@@ -189,10 +189,10 @@ def gather_temporal_statistics_on_open(
     )
     min_max_acfo = calculate_minmax_acfo(avg_changes_by_minute_after_open_df)
     return {
-        'acfo_at_thirty_mins': acfo_at_thirty_mins,
-        'acfo_at_sixty_mins': acfo_at_sixty_mins,
-        'std_deviation_at_t_sixty': std_deviation_at_t_sixty,
-        'pct_above_median_at_t_sixty': pct_above_median_at_t_sixty,
+        'ACFO t+30': acfo_at_thirty_mins,
+        'ACFO t+60': acfo_at_sixty_mins,
+        'Std Deviation of Intraday Price Change at Open t+60': std_deviation_at_t_sixty,
+        'Percent GTE Median CFO t+60': pct_above_median_at_t_sixty,
         **min_max_acfo
     }
 
@@ -254,11 +254,11 @@ def merge_daily_stats_into_df(true_open_daily, sliding_open_daily) -> pd.DataFra
     # Append true open dicts to the dataframe
     for key, value in true_open_daily.items():
         day_of_week_target_df = day_of_week_target_df.append(
-            {**value, 'day_of_week': key, 'open_type': 'true_open'}, ignore_index=True)
+            {**value, 'day_of_week': key, 'Open Type': 'true_open'}, ignore_index=True)
     # Append sliding open dicts to the dataframe
     for key, value in sliding_open_daily.items():
         day_of_week_target_df = day_of_week_target_df.append(
-            {**value, 'day_of_week': key, 'open_type': 'sliding_open'}, ignore_index=True)
+            {**value, 'day_of_week': key, 'Open Type': 'sliding_open'}, ignore_index=True)
     return day_of_week_target_df
 
 
@@ -268,11 +268,11 @@ def merge_monthly_stats_into_df(true_open_monthly, sliding_open_monthly) -> pd.D
     # Append true open dicts to the dataframe
     for key, value in true_open_monthly.items():
         monthly_target_df = monthly_target_df.append(
-            {**value, 'month': key, 'open_type': 'true_open'}, ignore_index=True)
+            {**value, 'month': key, 'Open Type': 'true_open'}, ignore_index=True)
     # Append sliding open dicts to the dataframe
     for key, value in sliding_open_monthly.items():
         monthly_target_df = monthly_target_df.append(
-            {**value, 'month': key, 'open_type': 'sliding_open'}, ignore_index=True)
+            {**value, 'month': key, 'Open Type': 'sliding_open'}, ignore_index=True)
     return monthly_target_df
 
 
@@ -282,11 +282,11 @@ def merge_yearly_stats_into_df(true_open_yearly, sliding_open_yearly) -> pd.Data
     # Append true open dicts to the dataframe
     for key, value in true_open_yearly.items():
         yearly_target_df = yearly_target_df.append(
-            {**value, 'year': key, 'open_type': 'true_open'}, ignore_index=True)
+            {**value, 'year': key, 'Open Type': 'true_open'}, ignore_index=True)
     # Append sliding open dicts to the dataframe
     for key, value in sliding_open_yearly.items():
         yearly_target_df = yearly_target_df.append(
-            {**value, 'year': key, 'open_type': 'sliding_open'}, ignore_index=True)
+            {**value, 'year': key, 'Open Type': 'sliding_open'}, ignore_index=True)
     return yearly_target_df
 
     # Script execution Starts Here
