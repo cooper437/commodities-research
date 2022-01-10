@@ -2,6 +2,7 @@ import enum
 import time
 import os
 import numpy as np
+from decimal import Decimal, ROUND_HALF_UP
 import pandas as pd
 from cytoolz import valmap, itemmap, keymap
 from typing import NamedTuple, List
@@ -68,6 +69,12 @@ def filter_bars_for_dte_with_frequently_missing_open(
     filtered_df = intraday_open_df[(intraday_open_df['DTE'] >= dte_filter_lower_boundary) & (
         intraday_open_df['DTE'] <= dte_filter_upper_boundary)]
     return filtered_df
+
+
+def round_to_nearest_thousandth(np_float: np.float64) -> Decimal:
+    rounded = Decimal(np_float).quantize(
+        Decimal('0.001'), rounding=ROUND_HALF_UP)
+    return rounded
 
 
 def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
@@ -160,8 +167,8 @@ def calculate_minmax_acfo(avg_changes_by_minute_after_open_df:  NamedTuple) -> d
     return {
         'Minute of Max ACFO': max_minute['Open Minutes Offset'],
         'Minute of Min ACFO': min_minute['Open Minutes Offset'],
-        'Max ACFO': max_minute['Mean Intraday Price Change'],
-        'Min ACFO': min_minute['Mean Intraday Price Change']
+        'Max ACFO': round_to_nearest_thousandth(max_minute['Mean Intraday Price Change']),
+        'Min ACFO': round_to_nearest_thousandth(min_minute['Mean Intraday Price Change'])
     }
 
 
@@ -194,10 +201,10 @@ def gather_temporal_statistics_on_open(
     )
     min_max_acfo = calculate_minmax_acfo(avg_changes_by_minute_after_open_df)
     return {
-        'ACFO t+30': acfo_at_thirty_mins,
-        'ACFO t+60': acfo_at_sixty_mins,
-        'Std Deviation of Intraday Price Change at Open t+60': std_deviation_at_t_sixty,
-        'Percent GTE Median CFO t+60': pct_above_median_at_t_sixty,
+        'ACFO t+30': round_to_nearest_thousandth(acfo_at_thirty_mins),
+        'ACFO t+60': round_to_nearest_thousandth(acfo_at_sixty_mins),
+        'Std Deviation of Intraday Price Change at Open t+60': round_to_nearest_thousandth(std_deviation_at_t_sixty),
+        'Percent GTE Median CFO t+60': round_to_nearest_thousandth(pct_above_median_at_t_sixty),
         **min_max_acfo
     }
 
@@ -293,7 +300,6 @@ def merge_yearly_stats_into_df(true_open_yearly, sliding_open_yearly) -> pd.Data
         yearly_target_df = yearly_target_df.append(
             {**value, 'Year': key, 'Open Type': 'sliding_open'}, ignore_index=True)
     return yearly_target_df
-
 
     # Script execution Starts Here
 target_file_exists = os.path.exists(TARGET_FILE_DEST_BY_DAY)

@@ -9,6 +9,8 @@ field in the COT reports. Under the hood what we are doing is as follows for eac
 '''
 from typing import List, NamedTuple
 from collections import namedtuple
+from decimal import Decimal, ROUND_HALF_UP
+import numpy as np
 import os
 import datetime
 import operator
@@ -87,6 +89,12 @@ def cot_csv_to_df(filename) -> pd.DataFrame:
         parse_dates=['Date']
     )
     return csv_as_df
+
+
+def round_to_nearest_thousandth(np_float: np.float64) -> Decimal:
+    rounded = Decimal(np_float).quantize(
+        Decimal('0.001'), rounding=ROUND_HALF_UP)
+    return rounded
 
 
 def is_nonreportable_column(a_column):
@@ -309,16 +317,17 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Above/Below Median Of CoT Field': 'above',
             'Open Type': open_type,
             'Median Value Of CoT Field': median_value_for_column,
-            'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Above Median'],
-            'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median'],
+            'ACFO t+30': round_to_nearest_thousandth(open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Above Median']),
+            'ACFO t+60': round_to_nearest_thousandth(open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Above Median']),
             f"Std Deviation of Intraday Price Change at Open t+{KEY_OPEN_MINUTE_OF_INTEREST}":
-                intraday_price_change_standard_deviations.above_median,
-            'Max ACFO': minmax_acfo_stats['max_above_median_mean_acfo'],
-            'Min ACFO': minmax_acfo_stats['min_above_median_mean_acfo'],
+                round_to_nearest_thousandth(
+                    intraday_price_change_standard_deviations.above_median),
+            'Max ACFO': round_to_nearest_thousandth(minmax_acfo_stats['max_above_median_mean_acfo']),
+            'Min ACFO': round_to_nearest_thousandth(minmax_acfo_stats['min_above_median_mean_acfo']),
             'Minute of Max ACFO': minmax_acfo_stats['minute_of_max_above_median_mean_acfo'],
             'Minute of Min ACFO': minmax_acfo_stats['minute_of_min_above_median_mean_acfo'],
             'Median Intraday CFO Value t+60': intraday_price_cfo_at_key_minute_median,
-            'Percent GTE Median CFO t+60': above_below_cfo_stats_for_above_cot_median['pct_gte_median']
+            'Percent GTE Median CFO t+60': round_to_nearest_thousandth(above_below_cfo_stats_for_above_cot_median['pct_gte_median'])
         }, ignore_index=True)
         # Now capture below median stats
         cot_analytics_table_df = cot_analytics_table_df.append({
@@ -327,16 +336,17 @@ def process_file(a_file: str, intraday_df: pd.DataFrame, open_type: str):
             'Above/Below Median Of CoT Field': 'below',
             'Open Type': open_type,
             'Median Value Of CoT Field': median_value_for_column,
-            'ACFO t+30': open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Below Median'],
-            'ACFO t+60': open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median'],
+            'ACFO t+30': round_to_nearest_thousandth(open_intraday_average_changes.iloc[29]['Avg Intraday Price Change When COT Field Below Median']),
+            'ACFO t+60': round_to_nearest_thousandth(open_intraday_average_changes.iloc[59]['Avg Intraday Price Change When COT Field Below Median']),
             f"Std Deviation of Intraday Price Change at Open t+{KEY_OPEN_MINUTE_OF_INTEREST}":
-                intraday_price_change_standard_deviations.below_median,
-            'Max ACFO': minmax_acfo_stats['max_below_median_mean_acfo'],
-            'Min ACFO': minmax_acfo_stats['min_below_median_mean_acfo'],
+                round_to_nearest_thousandth(
+                    intraday_price_change_standard_deviations.below_median),
+            'Max ACFO': round_to_nearest_thousandth(minmax_acfo_stats['max_below_median_mean_acfo']),
+            'Min ACFO': round_to_nearest_thousandth(minmax_acfo_stats['min_below_median_mean_acfo']),
             'Minute of Max ACFO': minmax_acfo_stats['minute_of_max_below_median_mean_acfo'],
             'Minute of Min ACFO': minmax_acfo_stats['minute_of_min_below_median_mean_acfo'],
             'Median Intraday CFO Value t+60': intraday_price_cfo_at_key_minute_median,
-            'Percent GTE Median CFO t+60': above_below_cfo_stats_for_below_cot_median['pct_gte_median']
+            'Percent GTE Median CFO t+60': round_to_nearest_thousandth(above_below_cfo_stats_for_below_cot_median['pct_gte_median'])
         }, ignore_index=True)
     return cot_analytics_table_df
 
