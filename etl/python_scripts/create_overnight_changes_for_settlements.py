@@ -1,8 +1,10 @@
 import enum
 import os
+import numpy as np
 import pandas as pd
 import datetime
 from typing import List, Tuple
+from decimal import Decimal, ROUND_HALF_UP
 from pandas.core.frame import DataFrame
 from tqdm import trange
 import logging
@@ -12,11 +14,19 @@ import getopt
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
     CURRENT_DIR, '../../data/raw/nasdaq_srf_futures_settlement')
+PROCESSED_DATA_DIR = os.path.join(
+    CURRENT_DIR, '../../data/processed/futures_contracts/')
 LIVE_CATTLE_INTRADAY_TRUE_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_true_open.csv'
 )
 LIVE_CATTLE_INTRADAY_SLIDING_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_sliding_open.csv'
+)
+TRUE_OPEN_TARGET_FILEPATH = os.path.join(
+    PROCESSED_DATA_DIR, 'overnight_changes_from_settlement_true_open.csv'
+)
+SLIDING_OPEN_TARGET_FILEPATH = os.path.join(
+    PROCESSED_DATA_DIR, 'overnight_changes_from_settlement_sliding_open.csv'
 )
 
 logging.basicConfig(
@@ -48,6 +58,12 @@ def settlement_data_to_df(filename) -> pd.DataFrame:
     return csv_as_df
 
 
+def round_to_nearest_thousandth(np_float: np.float64) -> Decimal:
+    rounded = Decimal(np_float).quantize(
+        Decimal('0.001'), rounding=ROUND_HALF_UP)
+    return rounded
+
+
 def contract_month_and_year_from_file_name(filename: str) -> Tuple[str]:
     settlement_data_month_and_year = filename[-9:-4]
     settlement_data_contract_month = settlement_data_month_and_year[0]
@@ -61,7 +77,7 @@ def calculate_overnight_change_from_settlement(a_days_open_bar, a_prior_days_set
         return None
     price_change = a_days_open_bar['Open'] - \
         a_prior_days_settlement_bar['Settle']
-    return price_change
+    return round_to_nearest_thousandth(price_change)
 
 
 def get_first_bar_available_for_day(a_date: datetime.date, a_contracts_open_data: pd.DataFrame) -> pd.Series:
@@ -119,4 +135,10 @@ overnight_changes_true_open_df = process_overnight_settlement_changes(
     settlement_csv_filenames=settlement_csv_filenames, intraday_open_df=intraday_true_open_df)
 overnight_changes_sliding_open_df = process_overnight_settlement_changes(
     settlement_csv_filenames=settlement_csv_filenames, intraday_open_df=intraday_sliding_open_df)
+logging.info(f"Saving true open target csv to {TRUE_OPEN_TARGET_FILEPATH}")
+overnight_changes_true_open_df.to_csv(TRUE_OPEN_TARGET_FILEPATH, index=False)
+logging.info(
+    f"Saving sliding open target csv to {SLIDING_OPEN_TARGET_FILEPATH}")
+overnight_changes_sliding_open_df.to_csv(
+    SLIDING_OPEN_TARGET_FILEPATH, index=False)
 logging.info('Done')
