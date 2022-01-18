@@ -16,19 +16,16 @@ CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
     CURRENT_DIR, '../../data/raw/nasdaq_srf_futures_settlement')
 PROCESSED_DATA_DIR = os.path.join(
-    CURRENT_DIR, '../../data/processed/futures_contracts/')
+    CURRENT_DIR, '../../data/processed/futures_contracts')
+SETTLEMENT_DATA_DIR = os.path.join(PROCESSED_DATA_DIR, 'settlement_analytics')
 LIVE_CATTLE_INTRADAY_TRUE_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_true_open.csv'
 )
 LIVE_CATTLE_INTRADAY_SLIDING_OPEN_FILE_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/contract_open_enriched_sliding_open.csv'
 )
-TRUE_OPEN_TARGET_FILEPATH = os.path.join(
-    PROCESSED_DATA_DIR, 'overnight_changes_from_settlement_true_open.csv'
-)
-SLIDING_OPEN_TARGET_FILEPATH = os.path.join(
-    PROCESSED_DATA_DIR, 'overnight_changes_from_settlement_sliding_open.csv'
-)
+TRUE_OPEN_TARGET_FILENAME = 'changes_from_settlement_true_open'
+SLIDING_OPEN_TARGET_FILENAME = 'changes_from_settlement_sliding_open'
 UNIQUE_TRADING_DAYS_LE_CONTRACTS_FILE_PATH = os.path.join(
     PROCESSED_DATA_DIR, 'unique_trading_days_le_contracts.csv'
 )
@@ -130,7 +127,7 @@ def get_settlement_data_for_previous_trading_day(
     if number_of_rows > 1:  # Should never happen
         raise Exception('More than one row of settlement data matched')
     num_lookback_days = (a_date - prior_trading_day_date).days
-    logging.info(
+    logging.debug(
         f"a_date={a_date} prior_trading_day_date={prior_trading_day_date} total_num_lookback_days={num_lookback_days}")
     return (data_for_previous_trading_day.iloc[0], num_lookback_days)
 
@@ -269,10 +266,18 @@ overnight_changes_sliding_open_df = process_overnight_settlement_changes(
     settlement_comparison_report_interval=settlement_comparison_report_interval,
     unique_trading_days=unique_trading_days
 )
-logging.info(f"Saving true open target csv to {TRUE_OPEN_TARGET_FILEPATH}")
-overnight_changes_true_open_df.to_csv(TRUE_OPEN_TARGET_FILEPATH, index=False)
+true_open_filepath = os.path.join(
+    SETTLEMENT_DATA_DIR, TRUE_OPEN_TARGET_FILENAME + '_' +
+    settlement_comparison_report_interval.value + '.csv'
+)
+sliding_open_filepath = os.path.join(
+    SETTLEMENT_DATA_DIR, SLIDING_OPEN_TARGET_FILENAME + '_' +
+    settlement_comparison_report_interval.value + '.csv'
+)
+logging.info(f"Saving true open target csv to {true_open_filepath}")
+overnight_changes_true_open_df.to_csv(true_open_filepath, index=False)
 logging.info(
-    f"Saving sliding open target csv to {SLIDING_OPEN_TARGET_FILEPATH}")
+    f"Saving sliding open target csv to {sliding_open_filepath}")
 overnight_changes_sliding_open_df.to_csv(
-    SLIDING_OPEN_TARGET_FILEPATH, index=False)
+    sliding_open_filepath, index=False)
 logging.info('Done')
