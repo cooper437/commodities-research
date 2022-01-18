@@ -34,7 +34,7 @@ UNIQUE_TRADING_DAYS_LE_CONTRACTS_FILE_PATH = os.path.join(
 )
 
 logging.basicConfig(
-    format='%(asctime)s - %(levelname)s:%(message)s', level=logging.DEBUG)
+    format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
 
 
 class Settlement_Comparison_Interval(enum.Enum):
@@ -184,13 +184,13 @@ def get_settlement_data_offset_by_interval(
             return get_settlement_data_for_day_in_previous_week(
                 a_date=a_date,
                 settlement_data_df=settlement_data_df,
-                base_lookback_days=datetime.timedelta(weeks=1)
+                base_lookback_days=datetime.timedelta(days=7)
             )
         case Settlement_Comparison_Interval.MONTHLY.name:
             return get_settlement_data_for_day_in_previous_week(
                 a_date=a_date,
                 settlement_data_df=settlement_data_df,
-                base_lookback_days=datetime.timedelta(months=1)
+                base_lookback_days=datetime.timedelta(days=30)
             )
         case _:
             raise Exception('Unsupported Settlement_Comparison_Interval type')
@@ -227,7 +227,12 @@ def process_overnight_settlement_changes(
             difference_between_open_price_and_prior_settlement = calculate_change_between_open_and_prior_settlement(
                 a_days_open_bar=first_available_bar, a_prior_days_settlement_bar=settlement_bar)
             overnight_settlement_price_changes_df = overnight_settlement_price_changes_df.append(
-                {'Symbol': 'LE' + contract_month_and_year, 'Date': a_date, 'Price Difference b/w Open And Prior Day Settlement': difference_between_open_price_and_prior_settlement}, ignore_index=True)
+                {
+                    'Symbol': 'LE' + contract_month_and_year,
+                    'Date': a_date,
+                    'Price Difference b/w Open And Prior Day Settlement': difference_between_open_price_and_prior_settlement,
+                    'Days Looking Back': num_lookback_days
+                }, ignore_index=True)
     return overnight_settlement_price_changes_df
 
 
