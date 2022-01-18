@@ -6,6 +6,7 @@ import datetime
 from typing import List, Tuple
 from decimal import Decimal, ROUND_HALF_UP
 from pandas.core.frame import DataFrame
+from pandas.core.series import Series
 from tqdm import trange
 import logging
 import sys
@@ -125,10 +126,45 @@ def get_settlement_data_for_previous_trading_day(
                                                        prior_trading_day_date]
     number_of_rows = len(data_for_previous_trading_day.index)
     if number_of_rows == 0:
-        return None
+        return (None, 0)
     if number_of_rows > 1:  # Should never happen
         raise Exception('More than one row of settlement data matched')
-    return data_for_previous_trading_day.iloc[0]
+    num_lookback_days = (a_date - prior_trading_day_date).days
+    logging.info(
+        f"a_date={a_date} prior_trading_day_date={prior_trading_day_date} total_num_lookback_days={num_lookback_days}")
+    return (data_for_previous_trading_day.iloc[0], num_lookback_days)
+
+
+def get_settlement_data_for_day_in_previous_week(
+    a_date: datetime.date,
+    settlement_data_df: pd.DataFrame,
+    base_lookback_days: datetime.timedelta
+) -> pd.Series:
+    unique_trading_days = np.sort(settlement_data_df['Date'].dt.date.values)
+    first_trading_day_available = unique_trading_days[0]
+    additional_days_lookback = datetime.timedelta(days=1)
+    lookback_date = a_date - base_lookback_days
+    # Check if the date is a trading day and if so get the index
+    if lookback_date in unique_trading_days:
+        prior_trading_day_date = lookback_date
+    # The date is not a trading day so we loop continuously backwards in time in 1 day incremenets to find the closest trading day before it
+    else:
+        while (lookback_date not in unique_trading_days):
+            lookback_date = lookback_date - additional_days_lookback
+            if lookback_date < first_trading_day_available:  # A check to make sure we dont enter an infinite loop
+                return (None, 0)
+            # We found the closest trading day prior to a week ago
+            if (lookback_date in unique_trading_days):
+                prior_trading_day_date = lookback_date
+                break
+            additional_days_lookback = additional_days_lookback + \
+                datetime.timedelta(days=1)
+    data_for_previous_trading_day = settlement_data_df[settlement_data_df['Date'].dt.date ==
+                                                       prior_trading_day_date]
+    num_lookback_days = (a_date - prior_trading_day_date).days
+    logging.debug(
+        f"a_date={a_date} prior_trading_day_date={prior_trading_day_date} total_num_lookback_days={num_lookback_days}")
+    return (data_for_previous_trading_day.iloc[0], num_lookback_days)
 
 
 def get_settlement_data_offset_by_interval(
@@ -143,6 +179,18 @@ def get_settlement_data_offset_by_interval(
                 a_date=a_date,
                 settlement_data_df=settlement_data_df,
                 unique_trading_days=unique_trading_days
+            )
+        case Settlement_Comparison_Interval.WEEKLY.name:
+            return get_settlement_data_for_day_in_previous_week(
+                a_date=a_date,
+                settlement_data_df=settlement_data_df,
+                base_lookback_days=datetime.timedelta(weeks=1)
+            )
+        case Settlement_Comparison_Interval.MONTHLY.name:
+            return get_settlement_data_for_day_in_previous_week(
+                a_date=a_date,
+                settlement_data_df=settlement_data_df,
+                base_lookback_days=datetime.timedelta(months=1)
             )
         case _:
             raise Exception('Unsupported Settlement_Comparison_Interval type')
@@ -170,7 +218,7 @@ def process_overnight_settlement_changes(
         for a_date in a_contracts_trading_dates:
             first_available_bar = get_first_bar_available_for_day(
                 a_date=a_date, a_contracts_open_data=a_contracts_open_data)
-            settlement_bar = get_settlement_data_offset_by_interval(
+            settlement_bar, num_lookback_days = get_settlement_data_offset_by_interval(
                 a_date=a_date,
                 settlement_data_df=settlement_data_df,
                 offset_interval=settlement_comparison_report_interval,
@@ -203,6 +251,7 @@ intraday_true_open_df = intraday_open_to_df(
 logging.info(f"Parsing intraday sliding open into dataframe")
 intraday_sliding_open_df = intraday_open_to_df(
     LIVE_CATTLE_INTRADAY_SLIDING_OPEN_FILE_PATH)
+# Overnight Interval
 overnight_changes_true_open_df = process_overnight_settlement_changes(
     settlement_csv_filenames=settlement_csv_filenames,
     intraday_open_df=intraday_true_open_df,
