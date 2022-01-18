@@ -164,11 +164,32 @@ def get_settlement_data_for_day_in_previous_week(
     return (data_for_previous_trading_day.iloc[0], num_lookback_days)
 
 
+def get_settlement_data_for_avg_month(
+    a_date: datetime.date,
+    settlements_by_month_df: pd.DataFrame
+) -> pd.Series:
+    month = a_date.month
+    previous_year = a_date.year - 1
+    settlement_for_same_month_last_year_df = settlements_by_month_df[(
+        settlements_by_month_df['Year'] == previous_year) & (settlements_by_month_df['Month'] == month)]
+    number_of_rows = len(settlement_for_same_month_last_year_df.index)
+    if number_of_rows == 0:
+        return (None, 0)
+    if number_of_rows > 1:  # Should never happen
+        raise Exception('More than one row of settlement data matched')
+    settlement_for_same_month_last_year_series = settlement_for_same_month_last_year_df.iloc[0]
+    logging.debug(
+        f"a_date={a_date} month={month} previous_year={previous_year}"
+    )
+    return (settlement_for_same_month_last_year_series, 365)
+
+
 def get_settlement_data_offset_by_interval(
     a_date: datetime.date,
     settlement_data_df: pd.DataFrame,
     offset_interval: Settlement_Comparison_Interval,
-    unique_trading_days: List[datetime.date]
+    unique_trading_days: List[datetime.date],
+    settlements_by_month_df: pd.DataFrame
 ):
     match offset_interval.name:
         case Settlement_Comparison_Interval.OVERNIGHT.name:
@@ -189,8 +210,23 @@ def get_settlement_data_offset_by_interval(
                 settlement_data_df=settlement_data_df,
                 base_lookback_days=datetime.timedelta(days=30)
             )
+        case Settlement_Comparison_Interval.ANNUALY.name:
+            return get_settlement_data_for_avg_month(
+                a_date=a_date,
+                settlements_by_month_df=settlements_by_month_df
+            )
         case _:
             raise Exception('Unsupported Settlement_Comparison_Interval type')
+
+
+def group_settlement_data_by_month(settlement_data_df: pd.DataFrame) -> pd.DataFrame:
+    settlement_data_limited_df = settlement_data_df[['Date', 'Settle']].copy()
+    settlement_data_limited_df = settlement_data_limited_df.set_index('Date')
+    settlement_mean_by_month_df = settlement_data_limited_df.resample(
+        'M').mean()
+    settlement_mean_by_month_df['Year'] = settlement_mean_by_month_df.index.year
+    settlement_mean_by_month_df['Month'] = settlement_mean_by_month_df.index.month
+    return settlement_mean_by_month_df
 
 
 def process_overnight_settlement_changes(
@@ -207,6 +243,8 @@ def process_overnight_settlement_changes(
         contract_month_and_year = contract_month_and_year_from_file_name(
             filename)
         settlement_data_df = settlement_data_to_df(filename)
+        settlements_by_month_df = group_settlement_data_by_month(
+            settlement_data_df)
         a_contracts_open_data = intraday_open_df[intraday_open_df['Symbol'].str[-3:]
                                                  == contract_month_and_year]
         a_contracts_trading_dates = a_contracts_open_data['DateTime'].dt.date\
@@ -219,7 +257,8 @@ def process_overnight_settlement_changes(
                 a_date=a_date,
                 settlement_data_df=settlement_data_df,
                 offset_interval=settlement_comparison_report_interval,
-                unique_trading_days=unique_trading_days
+                unique_trading_days=unique_trading_days,
+                settlements_by_month_df=settlements_by_month_df
             )
             difference_between_open_price_and_prior_settlement = calculate_change_between_open_and_prior_settlement(
                 a_days_open_bar=first_available_bar, a_prior_days_settlement_bar=settlement_bar)
