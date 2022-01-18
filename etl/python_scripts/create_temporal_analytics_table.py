@@ -1,3 +1,9 @@
+'''
+Analyzes our intraday open datasets (sliding and true open) then outputs a set of standardized temporal
+analytics regarding the open price dynamics. A separate output analytics table is produced for each of three
+groupings of data ways by day of week, by month, and by year allowing us to idetify signals/patterns
+at different time intervals.
+'''
 import enum
 import time
 import os
