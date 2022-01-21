@@ -322,8 +322,6 @@ intraday_sliding_open_df = filter_bars_for_dte_with_frequently_missing_open(
     intraday_open_df=intraday_sliding_open_df,
     dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
     dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
-
-
 )
 print("Loading the intraday true open dataframe into memory")
 intraday_true_open_df = intraday_open_csv_to_df(
