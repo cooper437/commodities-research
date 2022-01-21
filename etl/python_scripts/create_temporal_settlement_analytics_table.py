@@ -4,6 +4,7 @@ import os
 import numpy as np
 from decimal import Decimal, ROUND_HALF_UP
 import pandas as pd
+from tqdm import trange
 from cytoolz import valmap, itemmap, keymap
 from typing import NamedTuple, Tuple
 import logging
@@ -40,9 +41,11 @@ def intraday_open_csv_to_df(filename) -> pd.DataFrame:
     return csv_as_df
 
 
-def settlement_data_changes_median(interval: str, filename: str) -> pd.DataFrame:
+def settlement_data_changes_median(interval: str, filename: str) -> Tuple[float, dict]:
     '''
-    Get the median value for a particular open type and interval using the previously created temporal analytics tables
+    Get the median value for a particular open type and interval using the previously created overnight settlement datasets.
+    Return a tuple where the first element is the interval type we are dealing with (overnight, weekly, monthly, yearly) and the second element
+    is a dict containing the median value to split upon and the dates above and below that median by contract
     '''
     csv_as_df = pd.read_csv(
         filename,
@@ -54,7 +57,22 @@ def settlement_data_changes_median(interval: str, filename: str) -> pd.DataFrame
     price_diff_series = populated_price_only_df['Price Difference b/w Open And Prior Day Settlement'].sort_values(
         ignore_index=True)
     median = price_diff_series.median()
-    return (interval, median)
+    unique_symbols = populated_price_only_df['Symbol'].unique().tolist()
+    dates_above_below_by_contract = {}
+    for symbol in unique_symbols:
+        for_symbol_df = csv_as_df[csv_as_df['Symbol'] == symbol]
+        ge_median_dates = for_symbol_df[for_symbol_df[
+            'Price Difference b/w Open And Prior Day Settlement'] >= median]['Date'].dt.date.tolist()
+        lt_median_dates = for_symbol_df[for_symbol_df[
+            'Price Difference b/w Open And Prior Day Settlement'] < median]['Date'].dt.date.tolist()
+        dates_above_below_by_contract[symbol] = {
+            'ge_median_dates': ge_median_dates,
+            'lt_median_dates': lt_median_dates
+        }
+    return (interval, {
+        'Value Splitting Data': median,
+        'dates_above_below_by_contract': dates_above_below_by_contract
+    })
 
 
 def construct_full_path(filename_with_open_type: str, interval: str):
@@ -70,9 +88,9 @@ def calc_median_for_intervals_of_open_type(intervals_for_open_type: Tuple, filen
     return (open_type, interval_data_frames)
 
 
-def get_median_settlement_data_values(settlement_changes_base_filename: str, settlement_changes_base_file_path: str) -> dict:
+def get_median_settlement_dates_and_values(settlement_changes_base_filename: str, settlement_changes_base_file_path: str) -> dict:
     '''
-    Gather the median settlement data values for every combination of open type and interval
+    Gather the median settlement data values and dates above/below median for every combination of open type and interval
     '''
     median_price_vals = {
         'true_open': {
@@ -128,15 +146,27 @@ def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
     return to_return_df
 
 
-def split_intraday_minute_bars_by_median_df(intraday_minute_bars_df:  pd.DataFrame, median_val_to_split_on):
-    above_median_df = intraday_minute_bars_df[intraday_minute_bars_df[
-        'Price Change From Intraday Open'] >= median_val_to_split_on]
-    below_median_df = intraday_minute_bars_df[intraday_minute_bars_df[
-        'Price Change From Intraday Open'] < median_val_to_split_on]
+def split_intraday_minute_bars_by_median_df(intraday_minute_bars_df:  pd.DataFrame, settlement_median_data: dict):
+    unique_symbols = [*settlement_median_data['dates_above_below_by_contract'].keys(
+    )]
+    ge_median_df = pd.DataFrame()
+    lt_median_df = pd.DataFrame()
+    for symbol_index in trange(len(unique_symbols)):
+        symbol = unique_symbols[symbol_index]
+        intraday_minute_bars_for_symbol_df = intraday_minute_bars_df[
+            intraday_minute_bars_df['Symbol'] == symbol]
+        dates_ge_median = settlement_median_data['dates_above_below_by_contract'][symbol]['ge_median_dates']
+        dates_lt_median = settlement_median_data['dates_above_below_by_contract'][symbol]['lt_median_dates']
+        ge_median_for_symbol_df = intraday_minute_bars_for_symbol_df[intraday_minute_bars_for_symbol_df.DateTime.dt.date.isin(
+            dates_ge_median)]
+        lt_median_for_symbol_df = intraday_minute_bars_for_symbol_df[intraday_minute_bars_for_symbol_df.DateTime.dt.date.isin(
+            dates_lt_median)]
+        ge_median_df = pd.concat([ge_median_df, ge_median_for_symbol_df])
+        lt_median_df = pd.concat([lt_median_df, lt_median_for_symbol_df])
     return {
-        'Value Splitting Data': median_val_to_split_on,
-        'above_median_df': above_median_df,
-        'below_median_df': below_median_df
+        'Value Splitting Data': settlement_median_data['Value Splitting Data'],
+        'ge_median_df': ge_median_df,
+        'lt_median_df': lt_median_df
     }
 
 
@@ -161,38 +191,24 @@ intraday_true_open_df = filter_bars_for_dte_with_frequently_missing_open(
     dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
 )
 
-median_settlement_values = get_median_settlement_data_values(
+median_settlement_values = get_median_settlement_dates_and_values(
     settlement_changes_base_filename=SETLLEMENT_CHANGE_DATA_BASE_FILENAME, settlement_changes_base_file_path=SETLLEMENT_CHANGE_DATA_PATH)
 open_split_data = {
     'true_open': valmap(
-        lambda median_settlement_value: split_intraday_minute_bars_by_median_df(
+        lambda val: split_intraday_minute_bars_by_median_df(
             intraday_minute_bars_df=intraday_true_open_df,
-            median_val_to_split_on=median_settlement_value
+            settlement_median_data=val
         ),
         median_settlement_values['true_open']
     ),
     'sliding_open': valmap(
-        lambda median_settlement_value: split_intraday_minute_bars_by_median_df(
+        lambda val: split_intraday_minute_bars_by_median_df(
             intraday_minute_bars_df=intraday_sliding_open_df,
-            median_val_to_split_on=median_settlement_value
+            settlement_median_data=val
         ),
         median_settlement_values['sliding_open']
     )
 }
-# true_open_split_by_settlement = valmap(
-#     lambda median_settlement_value: split_intraday_minute_bars_by_median_df(
-#         intraday_minute_bars_df=intraday_true_open_df,
-#         median_val_to_split_on=median_settlement_value
-#     ),
-#     median_settlement_values['true_open']
-# )
-# sliding_open_split_by_settlement = valmap(
-#     lambda median_settlement_value: split_intraday_minute_bars_by_median_df(
-#         intraday_minute_bars_df=intraday_sliding_open_df,
-#         median_val_to_split_on=median_settlement_value
-#     ),
-#     median_settlement_values['sliding_open']
-# )
 print('hello')
 # valmap(
 #     lambda val: calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
