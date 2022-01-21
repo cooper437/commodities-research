@@ -110,6 +110,36 @@ def filter_bars_for_dte_with_frequently_missing_open(
     return filtered_df
 
 
+def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
+    intraday_minute_bars_df:  NamedTuple
+) -> pd.DataFrame:
+    '''
+    Group the intraday minute bars by their Open Minutes Offset and calculate the mean for each minute. Return all that as a single dataframe
+    '''
+    # First filter out all rows where Open Minutes Offset equals 60 because these are really the 61st minute after open which is outside the open window
+    intraday_minute_bars_df_filtered = intraday_minute_bars_df[
+        intraday_minute_bars_df['Open Minutes Offset'] != 60]
+    intraday_price_change_by_minute_after_open = intraday_minute_bars_df_filtered.groupby(
+        'Open Minutes Offset', as_index=False)['Price Change From Intraday Open'].mean()
+    to_return_df = pd.DataFrame({
+        'Open Minutes Offset': intraday_price_change_by_minute_after_open['Open Minutes Offset'],
+        'Mean Intraday Price Change': intraday_price_change_by_minute_after_open['Price Change From Intraday Open']
+    })
+    return to_return_df
+
+
+def split_intraday_minute_bars_by_median_df(intraday_minute_bars_df:  pd.DataFrame, median_val_to_split_on):
+    above_median_df = intraday_minute_bars_df[intraday_minute_bars_df[
+        'Price Change From Intraday Open'] >= median_val_to_split_on]
+    below_median_df = intraday_minute_bars_df[intraday_minute_bars_df[
+        'Price Change From Intraday Open'] < median_val_to_split_on]
+    return {
+        'Value Splitting Data': median_val_to_split_on,
+        'above_median_df': above_median_df,
+        'below_median_df': below_median_df
+    }
+
+
 logging.info("Loading the intraday sliding open dataframe into memory")
 intraday_sliding_open_df = intraday_open_csv_to_df(
     CONTRACT_INTRADAY_SLIDING_OPEN_FILE_PATH)
@@ -130,7 +160,42 @@ intraday_true_open_df = filter_bars_for_dte_with_frequently_missing_open(
     dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
     dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
 )
-print('hello')
 
-get_median_settlement_data_values(
+median_settlement_values = get_median_settlement_data_values(
     settlement_changes_base_filename=SETLLEMENT_CHANGE_DATA_BASE_FILENAME, settlement_changes_base_file_path=SETLLEMENT_CHANGE_DATA_PATH)
+open_split_data = {
+    'true_open': valmap(
+        lambda median_settlement_value: split_intraday_minute_bars_by_median_df(
+            intraday_minute_bars_df=intraday_true_open_df,
+            median_val_to_split_on=median_settlement_value
+        ),
+        median_settlement_values['true_open']
+    ),
+    'sliding_open': valmap(
+        lambda median_settlement_value: split_intraday_minute_bars_by_median_df(
+            intraday_minute_bars_df=intraday_sliding_open_df,
+            median_val_to_split_on=median_settlement_value
+        ),
+        median_settlement_values['sliding_open']
+    )
+}
+# true_open_split_by_settlement = valmap(
+#     lambda median_settlement_value: split_intraday_minute_bars_by_median_df(
+#         intraday_minute_bars_df=intraday_true_open_df,
+#         median_val_to_split_on=median_settlement_value
+#     ),
+#     median_settlement_values['true_open']
+# )
+# sliding_open_split_by_settlement = valmap(
+#     lambda median_settlement_value: split_intraday_minute_bars_by_median_df(
+#         intraday_minute_bars_df=intraday_sliding_open_df,
+#         median_val_to_split_on=median_settlement_value
+#     ),
+#     median_settlement_values['sliding_open']
+# )
+print('hello')
+# valmap(
+#     lambda val: calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
+#         val),
+#     median_settlement_values['true_open']
+# )
