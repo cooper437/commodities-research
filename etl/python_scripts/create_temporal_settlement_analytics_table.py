@@ -163,10 +163,16 @@ def split_intraday_minute_bars_by_median_df(intraday_minute_bars_df:  pd.DataFra
             dates_lt_median)]
         ge_median_df = pd.concat([ge_median_df, ge_median_for_symbol_df])
         lt_median_df = pd.concat([lt_median_df, lt_median_for_symbol_df])
+    avg_intraday_price_change_ge_median_df = calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
+        ge_median_df)
+    avg_intraday_price_change_lt_median_df = calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
+        lt_median_df)
     return {
         'Value Splitting Data': settlement_median_data['Value Splitting Data'],
         'ge_median_df': ge_median_df,
-        'lt_median_df': lt_median_df
+        'lt_median_df': lt_median_df,
+        'avg_intraday_price_change_ge_median_df': avg_intraday_price_change_ge_median_df,
+        'avg_intraday_price_change_lt_median_df': avg_intraday_price_change_lt_median_df
     }
 
 
