@@ -146,7 +146,82 @@ def calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
     return to_return_df
 
 
-def split_intraday_minute_bars_by_median_df(intraday_minute_bars_df:  pd.DataFrame, settlement_median_data: dict):
+def calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
+    intraday_minute_bars_df:  NamedTuple,
+    open_minute_offset: int,
+    intraday_price_cfo_at_key_minute_median: np.float64
+) -> dict:
+    '''
+    Calculate the percentage of rows that are above and below the median CFO value at a particular minute after the open
+    '''
+    intraday_price_change_at_minute_series = intraday_minute_bars_df[intraday_minute_bars_df[
+        'Open Minutes Offset'] == open_minute_offset]['Price Change From Intraday Open']
+    total_series_length = intraday_price_change_at_minute_series.size
+    num_rows_gte_median = intraday_price_change_at_minute_series[
+        intraday_price_change_at_minute_series >= intraday_price_cfo_at_key_minute_median].size
+    num_rows_lt_median = intraday_price_change_at_minute_series[
+        intraday_price_change_at_minute_series < intraday_price_cfo_at_key_minute_median].size
+    pct_gte_median = round(
+        (num_rows_gte_median / total_series_length) * 100, 4)
+    return pct_gte_median
+
+
+def calculate_minmax_acfo(avg_changes_by_minute_after_open_df:  NamedTuple) -> dict:
+    max_minute = avg_changes_by_minute_after_open_df.iloc[
+        avg_changes_by_minute_after_open_df['Mean Intraday Price Change'].idxmax()]
+    min_minute = avg_changes_by_minute_after_open_df.iloc[
+        avg_changes_by_minute_after_open_df['Mean Intraday Price Change'].idxmin()]
+    return {
+        'Minute of Max ACFO': max_minute['Open Minutes Offset'],
+        'Minute of Min ACFO': min_minute['Open Minutes Offset'],
+        'Max ACFO': round_to_nearest_thousandth(max_minute['Mean Intraday Price Change']),
+        'Min ACFO': round_to_nearest_thousandth(min_minute['Mean Intraday Price Change'])
+    }
+
+
+def gather_temporal_statistics_on_open(
+    avg_changes_by_minute_after_open_df: pd.DataFrame,
+    intraday_minute_bars_df: pd.DataFrame,
+    median_cfo_value_at_t_sixty_for_whole_dataset: np.float64
+) -> pd.DataFrame:
+    if avg_changes_by_minute_after_open_df.empty:
+        return {
+            'ACFO t+30': None,
+            'ACFO t+60': None,
+            'Std Deviation of Intraday Price Change at Open t+60': None,
+            'Percent GTE Median CFO t+60': None,
+            'Minute of Max ACFO': None,
+            'Minute of Min ACFO': None,
+            'Max ACFO': None,
+            'Min ACFO': None
+        }
+    acfo_at_thirty_mins = avg_changes_by_minute_after_open_df[avg_changes_by_minute_after_open_df[
+        'Open Minutes Offset'] == 29]['Mean Intraday Price Change'].iloc[0]
+    acfo_at_sixty_mins = avg_changes_by_minute_after_open_df[avg_changes_by_minute_after_open_df[
+        'Open Minutes Offset'] == 59]['Mean Intraday Price Change'].iloc[0]
+    std_deviation_at_t_sixty = intraday_minute_bars_df[intraday_minute_bars_df[
+        'Open Minutes Offset'] == 59]['Price Change From Intraday Open'].std()
+    pct_above_median_at_t_sixty = calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
+        intraday_minute_bars_df=intraday_minute_bars_df,
+        open_minute_offset=59,
+        intraday_price_cfo_at_key_minute_median=median_cfo_value_at_t_sixty_for_whole_dataset
+    )
+    min_max_acfo = calculate_minmax_acfo(avg_changes_by_minute_after_open_df)
+    return {
+        'ACFO t+30': round_to_nearest_thousandth(acfo_at_thirty_mins),
+        'ACFO t+60': round_to_nearest_thousandth(acfo_at_sixty_mins),
+        'Std Deviation of Intraday Price Change at Open t+60': round_to_nearest_thousandth(std_deviation_at_t_sixty),
+        'Percent GTE Median CFO t+60': round_to_nearest_thousandth(pct_above_median_at_t_sixty),
+        **min_max_acfo
+    }
+
+
+def analyze_open_type(
+    intraday_minute_bars_df:  pd.DataFrame,
+    settlement_median_data: dict,
+    median_cfo_value_at_t_sixty_for_whole_dataset: np.float64,
+    open_type: str
+):
     unique_symbols = [*settlement_median_data['dates_above_below_by_contract'].keys(
     )]
     ge_median_df = pd.DataFrame()
@@ -167,13 +242,35 @@ def split_intraday_minute_bars_by_median_df(intraday_minute_bars_df:  pd.DataFra
         ge_median_df)
     avg_intraday_price_change_lt_median_df = calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
         lt_median_df)
-    return {
+    ge_median_temporal_stats_on_open = gather_temporal_statistics_on_open(
+        avg_changes_by_minute_after_open_df=avg_intraday_price_change_ge_median_df,
+        intraday_minute_bars_df=ge_median_df,
+        median_cfo_value_at_t_sixty_for_whole_dataset=median_cfo_value_at_t_sixty_for_whole_dataset
+    )
+    lt_median_temporal_stats_on_open = gather_temporal_statistics_on_open(
+        avg_changes_by_minute_after_open_df=avg_intraday_price_change_lt_median_df,
+        intraday_minute_bars_df=lt_median_df,
+        median_cfo_value_at_t_sixty_for_whole_dataset=median_cfo_value_at_t_sixty_for_whole_dataset
+    )
+    output_df = pd.DataFrame()
+    output_df = output_df.append({
         'Value Splitting Data': settlement_median_data['Value Splitting Data'],
-        'ge_median_df': ge_median_df,
-        'lt_median_df': lt_median_df,
-        'avg_intraday_price_change_ge_median_df': avg_intraday_price_change_ge_median_df,
-        'avg_intraday_price_change_lt_median_df': avg_intraday_price_change_lt_median_df
-    }
+        'Above/Below Median': 'above',
+        **ge_median_temporal_stats_on_open
+    }, ignore_index=True)
+    output_df = output_df.append({
+        'Value Splitting Data': settlement_median_data['Value Splitting Data'],
+        'Above/Below Median': 'below',
+        **lt_median_temporal_stats_on_open
+    }, ignore_index=True)
+    return output_df
+    # return {
+    #     'Value Splitting Data': settlement_median_data['Value Splitting Data'],
+    #     'ge_median_df': ge_median_df,
+    #     'lt_median_df': lt_median_df,
+    #     'avg_intraday_price_change_ge_median_df': avg_intraday_price_change_ge_median_df,
+    #     'avg_intraday_price_change_lt_median_df': avg_intraday_price_change_lt_median_df
+    # }
 
 
 logging.info("Loading the intraday sliding open dataframe into memory")
@@ -196,21 +293,29 @@ intraday_true_open_df = filter_bars_for_dte_with_frequently_missing_open(
     dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
     dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
 )
+median_at_t_sixty_sliding_open = intraday_sliding_open_df[intraday_sliding_open_df[
+    'Open Minutes Offset'] == 59]['Price Change From Intraday Open'].sort_values().median()
+median_at_t_sixty_true_open = intraday_true_open_df[intraday_true_open_df[
+    'Open Minutes Offset'] == 59]['Price Change From Intraday Open'].sort_values().median()
 
 median_settlement_values = get_median_settlement_dates_and_values(
     settlement_changes_base_filename=SETLLEMENT_CHANGE_DATA_BASE_FILENAME, settlement_changes_base_file_path=SETLLEMENT_CHANGE_DATA_PATH)
 open_split_data = {
     'true_open': valmap(
-        lambda val: split_intraday_minute_bars_by_median_df(
+        lambda val: analyze_open_type(
             intraday_minute_bars_df=intraday_true_open_df,
-            settlement_median_data=val
+            settlement_median_data=val,
+            median_cfo_value_at_t_sixty_for_whole_dataset=median_at_t_sixty_true_open,
+            open_type='true_open'
         ),
         median_settlement_values['true_open']
     ),
     'sliding_open': valmap(
-        lambda val: split_intraday_minute_bars_by_median_df(
+        lambda val: analyze_open_type(
             intraday_minute_bars_df=intraday_sliding_open_df,
-            settlement_median_data=val
+            settlement_median_data=val,
+            median_cfo_value_at_t_sixty_for_whole_dataset=median_at_t_sixty_sliding_open,
+            open_type='sliding_open'
         ),
         median_settlement_values['sliding_open']
     )
