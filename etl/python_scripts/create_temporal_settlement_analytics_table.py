@@ -1,3 +1,11 @@
+'''
+Analyzes both our intraday open datasets (sliding and true open) and our eight settlement analytics datasets that show the
+'Price Difference b/w Open And Prior Day Settlement, using various lookback stragies for the the prior day to compare with.
+We then slice the data into 16 segments, 1 for every permutation of settlement lookback time interval 
+(overnight, weekly, monthly, yearly), open type (true and sliding), and above/below median (of the value for Price Difference b/w Open And Prior Day Settlement
+for that segment). For each of these segments we compute our standard temporal analytics metrics and finally populate a
+csv table with them into our data lake.
+'''
 import enum
 import time
 import os
@@ -83,6 +91,10 @@ def settlement_data_changes_median(interval: str, filename: str) -> Tuple[float,
 
 
 def construct_full_path(filename_with_open_type: str, interval: str):
+    '''
+    Constuct a string that represents the full path of
+    the filename for each combination of open type and lookback time interval.
+    '''
     full_path = f"{filename_with_open_type}_{interval}.csv"
     return full_path
 
@@ -193,6 +205,9 @@ def gather_temporal_statistics_on_open(
     intraday_minute_bars_df: pd.DataFrame,
     median_cfo_value_at_t_sixty_for_whole_dataset: np.float64
 ) -> pd.DataFrame:
+    '''
+    Gather our standard temporal analytics for intraday open data
+    '''
     if avg_changes_by_minute_after_open_df.empty:
         return {
             'ACFO t+30': None,
@@ -231,6 +246,9 @@ def analyze_open_type(
     median_cfo_value_at_t_sixty_for_whole_dataset: np.float64,
     open_type: str
 ) -> pd.DataFrame:
+    '''
+    Do everything we need to do to generate the temporal anlytics for one open type (true vs open)
+    '''
     unique_symbols = [*settlement_median_data['dates_above_below_by_contract'].keys(
     )]
     ge_median_df = pd.DataFrame()
@@ -276,6 +294,11 @@ def analyze_open_type(
 
 
 def consolidate_dfs_grouped_by_interval(dfs_for_open_type_grouped_by_interval: dict, open_type: str) -> pd.DataFrame:
+    '''
+    Given a dictionary with keys that map to lookback intervals (overnight, weekly, monthly, annualy) and values
+    that are the dataframes containing the temporal analytics for those respective keys, we consolidate all these into a
+    single dataframe.
+    '''
     consolidated_df = pd.DataFrame()
     for interval_type, settlement_analytics_for_interval_group_df in dfs_for_open_type_grouped_by_interval.items():
         settlement_analytics_for_interval_group_df = settlement_analytics_for_interval_group_df.assign(
