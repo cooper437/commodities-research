@@ -23,6 +23,10 @@ SETLLEMENT_CHANGE_DATA_PATH = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts/settlement_analytics'
 )
 SETLLEMENT_CHANGE_DATA_BASE_FILENAME = 'changes_from_settlement_'
+TARGET_FILENAME_SINGLE_CHANGES_FILENAME = 'temporal_intraday_open_settlement_analytics_single_changes.csv'
+TARGET_FILE_DEST_SINGLE_CHANGES_PATH = os.path.join(
+    SETLLEMENT_CHANGE_DATA_PATH, TARGET_FILENAME_SINGLE_CHANGES_FILENAME)
+
 
 # These parameters allow us to filter out trading activity on days where the contract DTE tends to have missing open bars
 DTE_FILTER_UPPER_BOUNDARY = 140
@@ -57,10 +61,13 @@ def settlement_data_changes_median(interval: str, filename: str) -> Tuple[float,
     price_diff_series = populated_price_only_df['Price Difference b/w Open And Prior Day Settlement'].sort_values(
         ignore_index=True)
     median = price_diff_series.median()
+    logging.debug(
+        f"Median Price Difference b/w Open And Prior Day Settlement={median}")
     unique_symbols = populated_price_only_df['Symbol'].unique().tolist()
     dates_above_below_by_contract = {}
     for symbol in unique_symbols:
-        for_symbol_df = csv_as_df[csv_as_df['Symbol'] == symbol]
+        for_symbol_df = csv_as_df[csv_as_df['Symbol']
+                                  == symbol].copy().reset_index()
         ge_median_dates = for_symbol_df[for_symbol_df[
             'Price Difference b/w Open And Prior Day Settlement'] >= median]['Date'].dt.date.tolist()
         lt_median_dates = for_symbol_df[for_symbol_df[
@@ -157,6 +164,8 @@ def calculate_pct_above_below_intraday_open_price_change_at_open_minute_offset(
     intraday_price_change_at_minute_series = intraday_minute_bars_df[intraday_minute_bars_df[
         'Open Minutes Offset'] == open_minute_offset]['Price Change From Intraday Open']
     total_series_length = intraday_price_change_at_minute_series.size
+    logging.debug(
+        f"The median of this segment of size={total_series_length} is {intraday_price_change_at_minute_series.median()} ")
     num_rows_gte_median = intraday_price_change_at_minute_series[
         intraday_price_change_at_minute_series >= intraday_price_cfo_at_key_minute_median].size
     num_rows_lt_median = intraday_price_change_at_minute_series[
@@ -221,7 +230,7 @@ def analyze_open_type(
     settlement_median_data: dict,
     median_cfo_value_at_t_sixty_for_whole_dataset: np.float64,
     open_type: str
-):
+) -> pd.DataFrame:
     unique_symbols = [*settlement_median_data['dates_above_below_by_contract'].keys(
     )]
     ge_median_df = pd.DataFrame()
@@ -229,7 +238,7 @@ def analyze_open_type(
     for symbol_index in trange(len(unique_symbols)):
         symbol = unique_symbols[symbol_index]
         intraday_minute_bars_for_symbol_df = intraday_minute_bars_df[
-            intraday_minute_bars_df['Symbol'] == symbol]
+            intraday_minute_bars_df['Symbol'] == symbol].copy().reset_index()
         dates_ge_median = settlement_median_data['dates_above_below_by_contract'][symbol]['ge_median_dates']
         dates_lt_median = settlement_median_data['dates_above_below_by_contract'][symbol]['lt_median_dates']
         ge_median_for_symbol_df = intraday_minute_bars_for_symbol_df[intraday_minute_bars_for_symbol_df.DateTime.dt.date.isin(
@@ -252,25 +261,30 @@ def analyze_open_type(
         intraday_minute_bars_df=lt_median_df,
         median_cfo_value_at_t_sixty_for_whole_dataset=median_cfo_value_at_t_sixty_for_whole_dataset
     )
-    output_df = pd.DataFrame()
-    output_df = output_df.append({
+    settlement_analytics_df = pd.DataFrame()
+    settlement_analytics_df = settlement_analytics_df.append({
         'Value Splitting Data': settlement_median_data['Value Splitting Data'],
         'Above/Below Median': 'above',
         **ge_median_temporal_stats_on_open
     }, ignore_index=True)
-    output_df = output_df.append({
+    settlement_analytics_df = settlement_analytics_df.append({
         'Value Splitting Data': settlement_median_data['Value Splitting Data'],
         'Above/Below Median': 'below',
         **lt_median_temporal_stats_on_open
     }, ignore_index=True)
-    return output_df
-    # return {
-    #     'Value Splitting Data': settlement_median_data['Value Splitting Data'],
-    #     'ge_median_df': ge_median_df,
-    #     'lt_median_df': lt_median_df,
-    #     'avg_intraday_price_change_ge_median_df': avg_intraday_price_change_ge_median_df,
-    #     'avg_intraday_price_change_lt_median_df': avg_intraday_price_change_lt_median_df
-    # }
+    return settlement_analytics_df
+
+
+def consolidate_dfs_grouped_by_interval(dfs_for_open_type_grouped_by_interval: dict, open_type: str) -> pd.DataFrame:
+    consolidated_df = pd.DataFrame()
+    for interval_type, settlement_analytics_for_interval_group_df in dfs_for_open_type_grouped_by_interval.items():
+        settlement_analytics_for_interval_group_df = settlement_analytics_for_interval_group_df.assign(
+            open_type=open_type).rename({'open_type': 'Open Type'}, axis=1)
+        settlement_analytics_for_interval_group_df = settlement_analytics_for_interval_group_df.assign(
+            Field=interval_type)
+        consolidated_df = pd.concat(
+            [consolidated_df, settlement_analytics_for_interval_group_df])
+    return consolidated_df
 
 
 logging.info("Loading the intraday sliding open dataframe into memory")
@@ -320,9 +334,13 @@ open_split_data = {
         median_settlement_values['sliding_open']
     )
 }
-print('hello')
-# valmap(
-#     lambda val: calculate_average_intraday_price_change_grouped_by_open_minutes_offset(
-#         val),
-#     median_settlement_values['true_open']
-# )
+settlement_analytics_for_true_open = consolidate_dfs_grouped_by_interval(
+    dfs_for_open_type_grouped_by_interval=open_split_data['true_open'], open_type='True Open')
+settlement_analytics_for_sliding_open = consolidate_dfs_grouped_by_interval(
+    dfs_for_open_type_grouped_by_interval=open_split_data['sliding_open'], open_type='Sliding Open')
+output_df = pd.DataFrame([])
+output_df = pd.concat([settlement_analytics_for_true_open,
+                      settlement_analytics_for_sliding_open])
+logging.info(
+    f"Saving single changes analytics file to {TARGET_FILE_DEST_SINGLE_CHANGES_PATH}")
+output_df.to_csv(TARGET_FILE_DEST_SINGLE_CHANGES_PATH, index=False)
