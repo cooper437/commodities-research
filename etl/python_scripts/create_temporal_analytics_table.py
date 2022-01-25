@@ -10,8 +10,8 @@ import os
 import numpy as np
 from decimal import Decimal, ROUND_HALF_UP
 import pandas as pd
-from cytoolz import valmap, itemmap, keymap
-from typing import NamedTuple, List
+from cytoolz import valmap
+from typing import NamedTuple
 
 CURRENT_DIR = os.path.dirname(__file__)
 PROCESSED_DATA_DIR = os.path.join(
@@ -322,8 +322,6 @@ intraday_sliding_open_df = filter_bars_for_dte_with_frequently_missing_open(
     intraday_open_df=intraday_sliding_open_df,
     dte_filter_lower_boundary=DTE_FILTER_LOWER_BOUNDARY,
     dte_filter_upper_boundary=DTE_FILTER_UPPER_BOUNDARY
-
-
 )
 print("Loading the intraday true open dataframe into memory")
 intraday_true_open_df = intraday_open_csv_to_df(
@@ -348,9 +346,9 @@ monthly_target_df = merge_monthly_stats_into_df(
     true_open_monthly=true_open_stats['by_month'],
     sliding_open_monthly=sliding_open_stats['by_month']
 )
-yearly_target_df = merge_monthly_stats_into_df(
-    true_open_monthly=true_open_stats['by_year'],
-    sliding_open_monthly=sliding_open_stats['by_year']
+yearly_target_df = merge_yearly_stats_into_df(
+    true_open_yearly=true_open_stats['by_year'],
+    sliding_open_yearly=sliding_open_stats['by_year']
 )
 print(f"Saving by day target csv to {TARGET_FILE_DEST_BY_DAY}")
 day_of_week_target_df.to_csv(TARGET_FILE_DEST_BY_DAY, index=False)
