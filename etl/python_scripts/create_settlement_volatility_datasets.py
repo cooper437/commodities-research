@@ -72,15 +72,24 @@ def calc_range_for_series(a_price_series: pd.Series) -> Decimal:
 def calc_thirty_day_stats(
     within_last_thirty_days_df: pd.DataFrame,
     a_date: datetime.date,
-    first_date_for_contract: datetime.date
+    first_date_for_contract: datetime.date,
+    a_dates_settlement_data: pd.Series,
+    thirty_days_plus_one_settlement_data: pd.Series
 ) -> Tuple:
     # Skip calculating the stats for the first n days where a_date - n days takes us before the first trading day available
     if (a_date - first_date_for_contract).days < 30:
         csd = None
         a_range = None
     else:
+        csd_settlement_prices_series = within_last_thirty_days_df['Settle']
+        # if we have the 31st days data insert it at the beginning of the list
+        if thirty_days_plus_one_settlement_data is not None:
+            csd_settlement_prices_series = pd.concat([pd.Series(
+                [thirty_days_plus_one_settlement_data['Settle']]), csd_settlement_prices_series], ignore_index=True)
+        settlement_price_change_series = csd_settlement_prices_series.diff()[
+            1:]
         csd = calc_custom_std_deviation(
-            within_last_thirty_days_df['Settle'])
+            settlement_price_change_series)
         a_range = calc_range_for_series(
             within_last_thirty_days_df['Settle'])
     return (a_range, csd)
@@ -112,6 +121,16 @@ def calc_one_year_stats(
         a_range = calc_range_for_series(
             within_last_year_df['Settle'])
     return a_range
+
+
+def get_index_of_thirty_one_days_ago(within_last_thirty_days_df: pd.DataFrame):
+    '''
+    Get the index of the day just outside our 30 day sliding window if we have it
+    '''
+    if (len(within_last_thirty_days_df.index)) == 0:
+        return None
+    index_value = within_last_thirty_days_df.index.values.min() - 1
+    return index_value if index_value >= 0 else None
 
 
 def process_settlement_volatility(
@@ -151,10 +170,20 @@ def process_settlement_volatility(
                 within_last_year_df['Settle'])
             a_date_metadata['7D Range'] = calc_range_for_series(
                 within_last_seven_days_df['Settle'])
+            index_of_thirty_one_days_ago = get_index_of_thirty_one_days_ago(
+                within_last_thirty_days_df)
+            # if we have settlement data for 31 days ago set it. This is needed to ensure that our CSD calcs return correctly even for the 30th day
+            if (index_of_thirty_one_days_ago is not None):
+                thirty_days_plus_one_settlement_data = settlement_data_df.iloc[
+                    index_of_thirty_one_days_ago]
+            else:
+                thirty_days_plus_one_settlement_data = None
             (thirty_day_range, csd_thirty) = calc_thirty_day_stats(
                 within_last_thirty_days_df=within_last_thirty_days_df,
                 a_date=a_date,
-                first_date_for_contract=first_date_for_contract
+                first_date_for_contract=first_date_for_contract,
+                a_dates_settlement_data=row,
+                thirty_days_plus_one_settlement_data=thirty_days_plus_one_settlement_data
             )
             seven_day_range = calc_seven_day_stats(
                 within_last_seven_days_df=within_last_seven_days_df,
