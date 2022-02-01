@@ -7,6 +7,7 @@ from typing import List, Tuple
 from decimal import Decimal, ROUND_HALF_UP
 from tqdm import trange
 import logging
+import time
 import math
 import sys
 import getopt
@@ -17,6 +18,8 @@ RAW_DATA_DIR = os.path.join(
 PROCESSED_DATA_DIR = os.path.join(
     CURRENT_DIR, '../../data/processed/futures_contracts')
 SETTLEMENT_DATA_DIR = os.path.join(PROCESSED_DATA_DIR, 'settlement_analytics')
+TARGET_FILENAME = 'settlement_volatility.csv'
+TARGET_FILE_DEST = os.path.join(SETTLEMENT_DATA_DIR, TARGET_FILENAME)
 
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s:%(message)s', level=logging.INFO)
@@ -60,7 +63,6 @@ def calc_custom_std_deviation(a_price_series: pd.Series) -> Decimal:
 
 
 def calc_range_for_series(a_price_series: pd.Series) -> Decimal:
-    print(a_price_series)
     a_max = a_price_series.max()
     a_min = a_price_series.min()
     a_range = round_to_nearest_thousandth(a_max - a_min)
@@ -72,16 +74,44 @@ def calc_thirty_day_stats(
     a_date: datetime.date,
     first_date_for_contract: datetime.date
 ) -> Tuple:
-    # Skip calculating the 30 day stats for the first thirty days of settlement data for every contract
-    if (a_date - first_date_for_contract).days <= 30:
-        csd_thirty = None
-        thirty_day_range = None
+    # Skip calculating the stats for the first n days where a_date - n days takes us before the first trading day available
+    if (a_date - first_date_for_contract).days < 30:
+        csd = None
+        a_range = None
     else:
-        csd_thirty = calc_custom_std_deviation(
+        csd = calc_custom_std_deviation(
             within_last_thirty_days_df['Settle'])
-        thirty_day_range = calc_range_for_series(
+        a_range = calc_range_for_series(
             within_last_thirty_days_df['Settle'])
-    return (thirty_day_range, csd_thirty)
+    return (a_range, csd)
+
+
+def calc_seven_day_stats(
+    within_last_seven_days_df: pd.DataFrame,
+    a_date: datetime.date,
+    first_date_for_contract: datetime.date
+) -> Decimal:
+    # Skip calculating the stats for the first n days where a_date - n days takes us before the first trading day available
+    if (a_date - first_date_for_contract).days < 7:
+        a_range = None
+    else:
+        a_range = calc_range_for_series(
+            within_last_seven_days_df['Settle'])
+    return a_range
+
+
+def calc_one_year_stats(
+    within_last_year_df: pd.DataFrame,
+    a_date: datetime.date,
+    first_date_for_contract: datetime.date
+) -> Decimal:
+    # Skip calculating the stats for the first n days where a_date - n days takes us before the first trading day available
+    if (a_date - first_date_for_contract).days < 365:
+        a_range = None
+    else:
+        a_range = calc_range_for_series(
+            within_last_year_df['Settle'])
+    return a_range
 
 
 def process_settlement_volatility(
@@ -106,11 +136,11 @@ def process_settlement_volatility(
             a_date_30_days_prior = a_date - datetime.timedelta(days=30)
             a_date_7_days_prior = a_date - datetime.timedelta(days=7)
             within_last_year_df = settlement_data_df[(settlement_data_df['Date'].dt.date >= a_date_year_prior) & (
-                settlement_data_df['Date'].dt.date <= a_date)]
+                settlement_data_df['Date'].dt.date < a_date)]
             within_last_thirty_days_df = within_last_year_df[(within_last_year_df['Date'].dt.date >= a_date_30_days_prior) & (
-                within_last_year_df['Date'].dt.date <= a_date)]
+                within_last_year_df['Date'].dt.date < a_date)]
             within_last_seven_days_df = within_last_thirty_days_df[(within_last_thirty_days_df['Date'].dt.date >= a_date_7_days_prior) & (
-                within_last_thirty_days_df['Date'].dt.date <= a_date)]
+                within_last_thirty_days_df['Date'].dt.date < a_date)]
             a_date_metadata['30D Count'] = len(
                 within_last_thirty_days_df.index)
             a_date_metadata['7D Count'] = len(
@@ -126,11 +156,31 @@ def process_settlement_volatility(
                 a_date=a_date,
                 first_date_for_contract=first_date_for_contract
             )
+            seven_day_range = calc_seven_day_stats(
+                within_last_seven_days_df=within_last_seven_days_df,
+                a_date=a_date,
+                first_date_for_contract=first_date_for_contract
+            )
+            one_year_range = calc_one_year_stats(
+                within_last_year_df=within_last_year_df,
+                a_date=a_date,
+                first_date_for_contract=first_date_for_contract
+            )
             a_date_metadata['30D CSD'] = csd_thirty
             a_date_metadata['30D Range'] = thirty_day_range
+            a_date_metadata['7D Range'] = seven_day_range
+            a_date_metadata['365D Range'] = one_year_range
             all_dates_metadata.append(a_date_metadata)
-    print('hello')
+    return pd.DataFrame(all_dates_metadata)
 
 
+# Script execution Starts Here
+target_file_exists = os.path.exists(TARGET_FILE_DEST)
+if target_file_exists:
+    logging.info(
+        'The target file already exists and will be overwritten. Abort in the next 5 seconds to cancel.')
+    time.sleep(5)
 settlement_csv_filenames = settlement_csv_files_to_analyze(RAW_DATA_DIR)
-process_settlement_volatility(settlement_csv_filenames)
+volatility_stats_df = process_settlement_volatility(settlement_csv_filenames)
+logging.info(f"Saving target csv to {TARGET_FILE_DEST}")
+volatility_stats_df.to_csv(TARGET_FILE_DEST, index=False)
