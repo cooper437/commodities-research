@@ -1,6 +1,9 @@
-import enum
+'''
+Generate an analytics table of potential trading signals based on the NASDAQ SRF settlement data.
+The table that is output contains a custom standard deviation, range, and count values related to data series for
+7 days, 30 days, and 365 days back.
+'''
 import os
-import numpy as np
 import pandas as pd
 import datetime
 from typing import List, Tuple
@@ -9,8 +12,6 @@ from tqdm import trange
 import logging
 import time
 import math
-import sys
-import getopt
 
 CURRENT_DIR = os.path.dirname(__file__)
 RAW_DATA_DIR = os.path.join(
@@ -32,7 +33,6 @@ def settlement_csv_files_to_analyze(data_dir):
         csv_files.append(file)
     csv_files.sort()
     return csv_files
-# Date,Open,High,Low,Settle,Volume,Prev. Day Open Interest
 
 
 def settlement_data_to_df(filename) -> pd.DataFrame:
