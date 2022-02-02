@@ -69,6 +69,15 @@ def calc_range_for_series(a_price_series: pd.Series) -> Decimal:
     return a_range
 
 
+def calc_range_between_high_and_low(a_df: pd.DataFrame) -> Decimal:
+    highs_and_lows_combined_series = pd.concat(
+        [a_df['High'],
+         a_df['Low']],
+        ignore_index=True)
+    a_range = calc_range_for_series(highs_and_lows_combined_series)
+    return a_range
+
+
 def calc_thirty_day_stats(
     within_last_thirty_days_df: pd.DataFrame,
     a_date: datetime.date,
@@ -90,8 +99,7 @@ def calc_thirty_day_stats(
             1:]
         csd = calc_custom_std_deviation(
             settlement_price_change_series)
-        a_range = calc_range_for_series(
-            within_last_thirty_days_df['Settle'])
+        a_range = calc_range_between_high_and_low(within_last_thirty_days_df)
     return (a_range, csd)
 
 
@@ -104,8 +112,7 @@ def calc_seven_day_stats(
     if (a_date - first_date_for_contract).days < 7:
         a_range = None
     else:
-        a_range = calc_range_for_series(
-            within_last_seven_days_df['Settle'])
+        a_range = calc_range_between_high_and_low(within_last_seven_days_df)
     return a_range
 
 
@@ -118,8 +125,7 @@ def calc_one_year_stats(
     if (a_date - first_date_for_contract).days < 365:
         a_range = None
     else:
-        a_range = calc_range_for_series(
-            within_last_year_df['Settle'])
+        a_range = calc_range_between_high_and_low(within_last_year_df)
     return a_range
 
 
@@ -166,10 +172,10 @@ def process_settlement_volatility(
                 within_last_seven_days_df.index)
             a_date_metadata['365D Count'] = len(
                 within_last_year_df.index)
-            a_date_metadata['365D Range'] = calc_range_for_series(
-                within_last_year_df['Settle'])
-            a_date_metadata['7D Range'] = calc_range_for_series(
-                within_last_seven_days_df['Settle'])
+            a_date_metadata['365D Range'] = calc_range_between_high_and_low(
+                within_last_year_df)
+            a_date_metadata['7D Range'] = calc_range_between_high_and_low(
+                within_last_seven_days_df)
             index_of_thirty_one_days_ago = get_index_of_thirty_one_days_ago(
                 within_last_thirty_days_df)
             # if we have settlement data for 31 days ago set it. This is needed to ensure that our CSD calcs return correctly even for the 30th day
